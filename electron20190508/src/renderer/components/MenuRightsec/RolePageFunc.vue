@@ -1,0 +1,303 @@
+<template>
+    <Row class="wrapper" :gutter="6">
+        <Col span="16" class="table-wrapper-height">
+            <div class="func-wrapper bg-none2">
+                <span class="section-title">角色信息</span>
+                <label for="">系统:&nbsp;</label>
+                <Select size="small" v-model="sysName" style="width:60px;" @on-change="selectRoleInfo(pageNum)">
+                    <Option v-for="item in sysList" :value="item.id" :key="item.id">{{ item.sysName }}</Option>
+                </Select>
+                <label for="">&nbsp;筛选:&nbsp;</label><Input class="section-search" size="small" v-model="roleName" :placeholder="placeholder" clearable @on-change="selectRoleInfo(pageNum)"/>
+            </div>
+            <div class="table-wrapper" ref="tableWrap">
+                <Table :height="tableHeight" :loading="loading"  strip highlight-row ref="selection" :columns="tableColumns" :data="tableData"
+                 @on-current-change="singleSelect">
+                </Table>
+                <Page size="small" :total="totalSize" :current="pageNum" 
+                    @on-page-size-change="pageSizeChange" @on-change="pageNumChange" 
+                    :page-size="pageSize" :page-size-opts="pageOpts" show-total show-elevator show-sizer>
+                </Page>
+            </div>
+        </Col>
+        <Col span="8" class="table-wrapper-height">
+            <div class="func-wrapper bg-none2">
+                <span class="section-title">角色对应页面、功能关系表</span>
+                <label for="">系统:&nbsp;</label>
+                <Select size="small" v-model="sysName2" style="width:70px;" @on-change="selectRoleRight">
+                    <Option v-for="item in sysList" :value="item.id" :key="item.id">{{ item.sysName }}</Option>
+                </Select>
+                <Button type="primary" size="small" @click="saveRight">保存</Button>
+            </div>
+            <div class="table-wrapper tree-wrapper">
+                <UpdateTree ref="tree" :data="treeData" :load-data="getPageFunc" show-checkbox multiple :empty-text="emptyTxt"></UpdateTree>
+            </div>
+        </Col>
+    </Row>
+</template>
+<script>
+//导入修改后的tree组件
+import UpdateTree from '../menutree/index.js'
+import { authBaseURL } from '../../ajax/config.js';
+
+export default {
+    name:'page_186',
+    data () {
+        return {
+            emptyTxt:'请选择左侧角色',
+            //系统列表
+            sysName2:0,
+            // sysList:[],
+            tableHeight:0,
+            //系统列表
+            sysName:0,
+            sysList:[],
+            roleRight:{},
+            pageSize:30,
+            totalSize:0,
+            pageNum:1,
+            pageOpts:[30,40,50],
+            //角色表格数据加载
+            roleId:-100,
+            loading:false,
+            roleName:'',
+            placeholder:'请输入角色名称',
+            tableColumns: [
+                // {
+                //     title: '主键ID',
+                //     key: 'id'
+                // },
+                {
+                    title: '角色名称',
+                    key: 'vcName',
+                    minWidth:120
+                },
+                {
+                    title: '角色父名称',
+                    key: 'vcPname',
+                    minWidth:120
+                },
+                {
+                    title: '排序依据',
+                    key: 'lOrder',
+                    minWidth:40
+                },
+                {
+                    title: '创建时间',
+                    key: 'dCreateTime',
+                    minWidth:120
+                },
+                {
+                    title: '最后修改时间',
+                    key: 'dUpdateTime',
+                    minWidth:120
+                },
+                {
+                    title: '备注',
+                    key: 'vcRemark',
+                    minWidth:80
+                }
+            ],
+            tableData: [],
+            treeData: []
+        }
+    },
+    created(){
+        this.selectRoleInfo();
+        this.selectAllSysInfo();
+    },
+    mounted(){
+        this.tableHeight=this.$refs.tableWrap.getBoundingClientRect().height - 36;
+        window.addEventListener('resize', () => {//动态调整高度
+            this.tableHeight=this.$refs.tableWrap.getBoundingClientRect().height - 36;
+        })
+    },
+    methods: {
+        //异步加载已有权限tree
+        getPageFunc(item,callback){
+            console.log('item');
+            console.log(item.id);
+            let resId=item.id;
+            //如果点击的是页面层级
+            //if(!item.type){
+                this.$httpGet(`/res/selectHierarchyRess`,{lSysId:this.sysName2,roleId:this.roleId,resId:resId},authBaseURL)
+                //this.$httpGet(`/omm/selectHaveJurisdictionTree?vcUserId=${this.userId}&lPageId=${item.id}`)
+                    .then((res) => {                
+                        if(res.data){
+                            if(res.data.length>0){
+                                //this.treeData.forEach((item)=>{
+                                res.data.forEach((item)=>{
+                                    if(item.childrenTotal>0){
+                                        item.loading=false;
+                                        //item.children=[];
+                                    }
+                                })
+                                callback(res.data); 
+                            }
+                                                     
+                            //如果是资产单元,删除其子级组合的loading
+                            // if(combiType==2){
+                            //     for(let j=0;j<item.children.length;j++){
+                            //         delete item.children[j].loading;
+                            //     }
+                            // }
+                        }                
+                    })
+            //}
+            // else{//如果点击的是其他层级
+            //     this.$httpGet(`/omm/selectHaveJurisdictionTree?vcUserId=${this.userId}&type=${item.type}&lPageId=${item.lPageId}&id=${item.id}`)
+            //         .then((res) => {
+            //             if(res.data){
+            //                 callback(res.data);
+            //                 //若父级选中，则子级都选中
+            //                 if(item.checked){
+            //                     for(let j=0;j<item.children.length;j++){
+            //                         item.children[j].checked=true;
+            //                     }
+            //                 }
+            //                 //如果是资产单元,删除其子级组合的loading
+            //                 if(combiType==2){
+            //                     for(let j=0;j<item.children.length;j++){
+            //                         delete item.children[j].loading;
+            //                     }
+            //                 }
+            //             }                
+            //         })
+            // }
+        },
+        //部门表格页码改变时的回调
+        pageNumChange (page){
+            this.pageNum = page;
+            this.selectRoleInfo();
+        },
+        //部门表格每页数据条数改变时的回调
+        pageSizeChange (pageSize){
+            this.pageSize = pageSize;
+            this.selectRoleInfo();
+        },
+        //保存角色权限
+        saveRight(){
+            //获取tree选中项
+            let resIds=[];
+            let childLenArr=[];
+            let childTotal=[];
+            let selectedItems=this.$refs.tree.getCheckedNodes();
+            if(selectedItems){
+                for(let i=0;i<selectedItems.length;i++){
+                    resIds.push(selectedItems[i].id);
+                    childLenArr.push(selectedItems[i].children.length);
+                    childTotal.push(selectedItems[i].childrenTotal);
+                }
+            }           
+            this.roleRight={
+                roleId:this.roleId,
+                resIds:resIds,
+                childLenArr:childLenArr,
+                childTotal:childTotal,
+                sysId:this.sysName2
+            }
+            //若无选中角色
+            if(!this.roleId){
+                this.$Message.warning("请选择要授权的角色！");
+            }else{
+                //this.$httpPost('/role/saveRoleRess',this.roleRight)
+                this.$httpPost('/role/saveRoleRess',this.roleRight,authBaseURL)
+                    .then((res)=>{
+                        if(res.data.actionResult==1){
+                            this.$Message.success(res.data.data);
+                            this.selectRoleRight();
+                        }else{
+                            this.$Message.warning(res.data.data);
+                        }
+                    })
+                    .catch(err => console.log('错误信息为:'+err))
+            }
+        },
+        //单选用户行高亮时，获取userID
+        singleSelect(currentRow,oldCurrentRow){
+            console.log("当前选中行"+currentRow.id);
+            this.roleId=currentRow.id;
+            this.selectRoleRight();
+        },
+        //查询所有系统
+        selectAllSysInfo(){
+            this.$httpGet('/dic/selectTSysClassify')
+                .then((res) => {                
+                    if(res.data){
+                        this.sysList=res.data;
+                    }                
+                })
+        },
+        selectRoleInfo(pageNum){//查询角色
+            let pageNumber=this.pageNum;
+                if(pageNum){
+                    pageNumber=1
+                }else{
+                    pageNumber=this.pageNum;
+                }
+            this.loading=true;
+            //this.$httpGet(`/role/selectRoles?type=1&sysId=${this.sysName}&vcName=${this.roleName}&pageNum=${pageNumber}&pageSize=${this.pageSize}`)
+            this.$httpGet(`/role/selectRoles`,{type:1,sysId:this.sysName,vcName:this.roleName,pageNum:pageNumber,pageSize:this.pageSize},authBaseURL)
+                .then((res) => {
+                    console.log("返回角色结果"+res.data);                
+                    if(res.data){
+                        this.tableData=res.data.list;
+                        this.totalSize=res.data.total;
+                        this.loading=false;
+                    }                
+                })
+        },
+        //查询角色权限
+        selectRoleRight(){
+            if(this.roleId===-100){
+                this.$Message.warning('请选择角色');
+            }else{
+                //this.$httpGet(`/res/selectHierarchyRess?lSysId=${this.sysName2}&roleId=${this.roleId}`)
+                this.$httpGet(`/res/selectHierarchyRess`,{lSysId:this.sysName2,roleId:this.roleId},authBaseURL)
+                    .then((res) => {
+                        if(res.data){
+                            this.treeData=res.data;
+                            if(this.treeData.length<1){
+                                this.emptyTxt="暂无数据";
+                            }else{//查询后添加箭头
+                                this.treeData.forEach((item)=>{
+                                    if(item.childrenTotal>0){
+                                        item.loading=false;
+                                        //item.children=[];
+                                        //item.children.length=2;
+                                        // console.log("dsfsdf");
+                                        // console.log(item.children);
+                                    }
+                                })
+                            }
+                        }                
+                    })
+            }
+            
+        }
+    },
+    components:{
+        UpdateTree
+    }
+}
+</script>
+<style scoped>
+
+/*table相关样式*/
+.wrapper{
+    height:100%;
+}
+.table-wrapper-height{/*table高度*/
+    height:100%;
+}
+.table-wrapper{
+    height:calc(100% - 37px);
+}
+.table-wrapper .ivu-table-wrapper{
+     height:calc(100% - 63px);
+}
+.tree-wrapper{
+    overflow-y: auto;
+}
+</style>
+
+

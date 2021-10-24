@@ -1,0 +1,576 @@
+<template>
+    <Row class="wrapper" :gutter="5">        
+        <Col span="6" class="tree-wrapper-height">
+            <div class="func-wrapper bg-none2">
+                <span class="section-title">数据权限</span>
+                <label for="">&nbsp;筛选:&nbsp;</label>
+                <Input class="section-search" size="small" @on-change="selectMgeRight" v-model="accountName" placeholder="账户名或首字母" clearable style="width:100px;"/>
+                <Button :disabled="btnDisabled" type="primary" size="small" @click="saveRight">保存</Button>
+            </div>
+            <!-- <div class="table-wrapper tree-wrapper"> -->
+                <Scroll :height='treeHeight' :loading-text="treeLoadingText" :on-reach-bottom="handleReachBottom" class="table-wrapper tree-wrapper" style="height:calc(100% - 36px);">
+                    <DatarightTree ref="tree" :load-data="addContent" :data="treeData" show-checkbox :empty-text="emptyText" :height="tableHeight"></DatarightTree>
+                </Scroll>
+                <Spin size="large" fix v-if="showSpin"></Spin>
+            <!-- </div> -->
+        </Col>
+        <Col span="12" class="table-wrapper-height">
+            <div class="func-wrapper bg-none2">
+                <span class="section-title">用户信息</span>
+                <label for="">&nbsp;筛选:&nbsp;</label>
+                <Input class="section-search" size="small" @on-change="selectUserInfo(pageNum)" v-model="userName" :placeholder="placeholder" clearable/>
+                <Button type="primary" size="small" @click="addMge">新增</Button>
+            </div>
+            <div class="table-wrapper center-table" ref="tableWrap">
+                <Table :loading="loading"  stripe highlight-row ref="selection" @on-current-change="singleSelect" :columns="tableColumns" :data="tableData" :height="tableHeight"></Table>
+            </div>
+            <Page size="small" :total="totalSize" :current="pageNum" @on-page-size-change="pageSizeChange" @on-change="pageNumChange" :page-size="pageSize" :page-size-opts="pageOpts" show-total show-elevator show-sizer></Page>
+        </Col>
+        <Col span="6" class="tree-wrapper-height">
+            <div class="func-wrapper bg-none2">
+                <span class="section-title">已有数据权限</span>
+                <Button :disabled="btnHasRightDisabled" type="primary" size="small" @click="delRight">删除</Button>
+            </div>
+            <div class="table-wrapper tree-wrapper right-tree">
+                <!-- <UpdateTree ref="tree" :load-data="addContent" :data="treeData" show-checkbox :empty-text="emptyText" :height="tableHeight"></UpdateTree> -->
+                <!-- <DatarightTree ref="tree" :load-data="addContent" :data="treeData" show-checkbox :empty-text="emptyText" :height="tableHeight"></DatarightTree> -->
+                <DatarightTreeTwo ref="hasRightTree" :load-data="addHasRightContent" :data="treeHasRightData" show-checkbox :empty-text="emptyHasRightText" :height="tableHeight"></DatarightTreeTwo>
+                <Spin size="large" fix v-if="showHasRightSpin">
+                    <!-- <Icon type="ios-loading" size=18 class="demo-spin-icon-load"></Icon>
+                    <div>加载中...</div> -->
+                </Spin>
+            </div>
+        </Col>
+        <Modal
+            class="label-style modal-wrapper"
+            width="360"
+            v-model="addModalShow"
+            :title="dialogTitle"
+            @on-cancel="cancelAdd('addForm')"
+            @on-ok="okAdd('addForm')">
+            <Form ref="addForm" :model="addForm" :rules="ruleValidate" :label-width="80">
+                <FormItem label="用户账号" prop="vcUserId">
+                    <Select
+                        class="user-account"
+                        v-model="addForm.vcUserId"
+                        filterable
+                        remote
+                        clearable
+                        :remote-method="getFilterUser"
+                        :loading="addLoading"
+                        :loading-text="remoteText">                        
+                        <Option v-for="(option, index) in allUsers" :value="option.id" :key="index">{{option.vcDisplayName}}</Option>
+                    </Select>
+                </FormItem>
+                <FormItem label="经理类型" prop="cManagerId">
+                    <Select v-model="addForm.cManagerId" clearable>
+                        <Option :value="item.id" :key="key"  v-for="(item,key) in positions">{{item.vcManagerType}}</Option>
+                    </Select>
+                </FormItem>
+            </Form>            
+        </Modal>
+    </Row>
+</template>
+<script>
+//import UpdateTree from '../busitree/index.js'
+import DatarightTree from '../datarighttree/index.js'
+import DatarightTreeTwo from '../datarighttree2/index.js'
+import { authBaseURL } from '../../ajax/config.js';
+export default {
+    name:'page_54',
+    data () {
+        return {
+            accountName:'',
+            //tree加载状态
+            remoteText:'加载中...',
+            treeLoadingText:'加载中',
+            leftTreePageNum:1,
+            showSpin:false,
+            showHasRightSpin:false,
+            emptyText:"请选择用户",
+            emptyHasRightText:'请选择用户',
+            flag:true,
+            query:'',
+            dialogTitle:'新增',
+            //过滤全部用户
+            allUsers:[],
+            //经理职位
+            positions:[],
+            //添加的经理
+            addForm: {
+                vcUserId: '',
+                cManagerId: 4
+            },
+            //添加框规则校验
+            ruleValidate: {
+                vcUserId: [
+                    { required: true, message: '请选择正确的用户账号', trigger: 'change' }
+                ],
+                cManagerId: [
+                    { required: true, type:'number', message: '请选择经理类型', trigger: 'change' }
+                ],
+            },
+            addLoading:false,
+            btnDisabled:false,
+            btnHasRightDisabled:false,
+            //选中编辑经理职位的行ID
+            selectedEditRowId:'',
+            //选中的经理职位
+            selectedPositions:[],
+            //新增弹框
+            addModalShow:false,
+            //所有半选状态
+            indeterminateItemArr:[],
+            //包含所有checked项的数组
+            selectItemArr:[],
+            userId:'',
+            cManagerId:-100,
+            loading:false,
+            //分页数据
+            pageSize:40,
+            totalSize:0,
+            pageNum:1,
+            pageOpts:[30,40,50],
+            userName:'',
+            placeholder:'请输入用户名称',
+            tableColumns: [
+                {   
+                    title: '用户账号',
+                    key: 'vcUserId',
+                    minWidth:80
+                },
+                {
+                    title: '用户中文名',
+                    key: 'vcDisplayName',
+                    minWidth:80
+                },
+                {
+                    title: '邮箱',
+                    key: 'vcEmail',
+                    minWidth:160
+                },
+                {
+                    title: '经理类型',
+                    key: 'vcManagerType',
+                    minWidth:100
+                },
+                {
+                    title: '操作',
+                    key: 'setting',
+                    align: 'center',
+                    width: 80,
+                    render: (h, params) => {
+                        return h('div', [
+                            h('Button', {
+                                props: {
+                                    type: 'primary',
+                                    size: 'small'
+                                },
+                                style: {
+                                    marginLeft: '15px'
+                                },
+                                on: {
+                                    click: (e) => {
+                                        e.stopPropagation();
+                                        this.dialogTitle="修改";
+                                        this.addModalShow=true;
+                                        this.selectedEditRowId=params.row.id;
+
+                                        this.userId=params.row.vcUserId;
+                                        this.cManagerId=params.row.cManagerId;
+                                        //对谈框内容进行赋值
+                                        this.addForm.vcUserId=params.row.vcUserId;
+                                        this.addForm.cManagerId=params.row.cManagerId;
+                                    }
+                                }
+                            }, '修改')
+                        ]);
+                    }
+                }
+            ],
+            tableHeight:500,
+            tableData:[],
+            treeData: [],
+            treeHasRightData:[]
+        }
+    },  
+    methods: {
+        //tree到达底部时触发懒加载
+        handleReachBottom(){
+            return new Promise(resolve => {
+                //setTimeout(() => {
+                    this.emptyText="";
+                    this.leftTreePageNum++;
+                    this.$httpGet(`/man/selectJurisdictionTree?vcFundName=${this.accountName}&pageNum=${this.leftTreePageNum}&vcUserId=${this.userId}&cManagerId=${this.cManagerId}`)
+                        .then((res) => {
+                            if(res.data && res.data.length>0){
+                                res.data.forEach((item) => {
+                                    this.treeData.push(item);
+                                })                                                               
+                            }   
+                            if(res.data.length<30){
+                                this.treeLoadingText="已加载完毕";
+                            }             
+                        })
+                    resolve();
+                //}, 2000);
+            });           
+        },
+        //输入时进行是否存在该用户校验
+        testQuery(){
+            if(!this.allUsers){
+                for(let i=0;i<this.allUsers.length;i++){
+                    if(this.allUsers[i].id!==this.query && this.allUsers[i].label!==this.query){                    
+                        this.flag=false;
+                    }
+                }
+            }
+            
+        },
+        //获取过滤后的用户
+        getFilterUser (query) {
+            this.query=query;
+            if (query !== '') {
+                this.addLoading=true;
+                //var url = `/user/selectUsersByNameOrAccount?nameOrAccount=${query}`;
+                //this.$httpGet(url).then((res) => {   
+                this.$httpGet(`/user/selectUsersByNameOrAccount`,{nameOrAccount:query},authBaseURL).then((res) => {   
+                    this.addLoading=false;
+                    console.log(res.data);
+                    const list = res.data.map(item => {
+                        return {
+                            id: item.id,
+                            label: item.vcDisplayName,
+                            vcDisplayName: item.id +'('+item.vcDisplayName+')'
+                        };
+                    });
+                    this.allUsers = list.filter(item => item.vcDisplayName.toLowerCase().indexOf(query.toLowerCase()) > -1);
+                })
+            }else{
+                this.allUsers = [];
+            }
+        },
+        //点击“新增”按钮
+        addMge(){
+            this.addModalShow=true;
+            this.dialogTitle="新增";
+        },
+        //确认'添加'或'修改'经理
+        okAdd(name){
+            //this.$refs[name].resetFields();
+            //输入时进行是否存在该用户校验
+            // if(this.allUsers.length>0){
+            //     for(let i=0;i<this.allUsers.length;i++){
+            //         if(this.allUsers[i].id!==this.query && this.allUsers[i].label!==this.query){                    
+            //             this.flag=false;
+            //         }
+            //     }
+            // }
+            // console.log(this.allUsers);
+            console.log(this.query);
+            // console.log(this.flag);
+            // if(this.flag){
+                if(this.dialogTitle=="新增"){//添加弹框
+                    this.$refs[name].validate((valid) => {
+                        if (valid) {
+                            this.$httpPost('/man/saveUserManager',this.addForm)
+                                .then((res)=>{
+                                    this.flag=true;
+                                    if(res.data.actionResult==1){
+                                        this.$Message.success(res.data.data);
+                                        this.$refs[name].resetFields();
+                                        this.selectUserInfo();
+                                        
+                                    }else{
+                                        this.$refs[name].resetFields();
+                                        this.$Message.warning(res.data.data);
+                                    }
+                                })
+                                .catch(err => console.log('错误信息为:'+err))
+                        }else{      
+                            this.$refs[name].resetFields();              
+                            this.$Message.error('请选择正确的用户账号!');
+                        }
+                    })
+                }else{//修改弹框
+                    this.$refs[name].validate((valid) => {
+                        if (valid) {
+                            this.$httpPost('/man/updateUserManager',{"id":this.selectedEditRowId,"cManagerId":this.addForm.cManagerId,"vcUserId":this.addForm.vcUserId})
+                                .then((res)=>{
+                                    this.flag=true;
+                                    if(res.data.actionResult==1){
+                                        this.$Message.success(res.data.data);
+                                        this.$refs[name].resetFields();
+                                        this.selectUserInfo();
+                                        
+                                    }else{
+                                        this.$refs[name].resetFields();
+                                        this.$Message.warning(res.data.data);
+                                    }
+                                })
+                                .catch(err => console.log('错误信息为:'+err))
+                        }else{ 
+                            this.$refs[name].resetFields();                       
+                            this.$Message.error('请选择正确的用户账号!');
+                        }
+                    })
+                }
+            // }else{                
+            //     this.$Message.warning("不存在该用户账号,请选择用户账号！");
+            // }
+        },
+        cancelAdd(name){
+            this.$refs[name].resetFields();
+        },
+        //异步加载tree
+        addContent(item,callback){
+            let combiType=item.type;
+                this.$httpGet(`/man/selectJurisdictionTree?vcUserId=${this.userId}&cManagerId=${this.cManagerId}&type=${item.type}&id=${item.id}`)
+                    .then((res) => {             
+                        if(res.data){
+                            callback(res.data);
+                            //若父级选中，则子级都选中
+                            if(item.checked){
+                                for(let j=0;j<item.children.length;j++){
+                                    item.children[j].checked=true;
+                                }
+                            }
+                            //如果是资产单元,删除其子级组合的loading
+                            if(combiType==2){
+                                for(let j=0;j<item.children.length;j++){
+                                    delete item.children[j].loading;
+                                }
+                            }
+                        }                
+                    })
+        },
+        //异步加载经理已有权限tree
+        addHasRightContent(item,callback){
+            let combiType=item.type;
+                this.$httpGet(`/man/selectHaveJurisdictionTree?vcUserId=${this.userId}&cManagerId=${this.cManagerId}&type=${item.type}&id=${item.id}`)
+                    .then((res) => {             
+                        if(res.data){
+                            callback(res.data);
+                            //若父级选中，则子级都选中
+                            if(item.checked){
+                                for(let j=0;j<item.children.length;j++){
+                                    item.children[j].checked=true;
+                                }
+                            }
+                            //如果是资产单元,删除其子级组合的loading
+                            if(combiType==2){
+                                for(let j=0;j<item.children.length;j++){
+                                    delete item.children[j].loading;
+                                }
+                            }
+                        }                
+                    })
+        },
+        //保存用户权限
+        saveRight(){
+            this.btnDisabled=true;
+            //获取半选状态
+            // this.indeterminateItemArr=[];
+            // let halfItems=this.$refs.tree.getIndeterminateNodes();
+            // for(let j=0;j<halfItems.length;j++){
+            //     let objHalf={};
+            //     objHalf.id=halfItems[j].id;
+            //     objHalf.pId=halfItems[j].pId;
+            //     objHalf.type=halfItems[j].type;
+            //     this.indeterminateItemArr.push(objHalf);
+            // }
+
+            //获取所有选中的
+            this.selectItemArr=[];
+            let selectedItems=this.$refs.tree.getCheckedNodes();
+            for(let i=0;i<selectedItems.length;i++){
+                let obj={};
+                obj.id=selectedItems[i].id;
+                obj.type=selectedItems[i].type;
+                obj.pId=selectedItems[i].pId;
+                this.selectItemArr.push(obj);     
+            }
+
+            if(!this.userId){//若没选择用户
+                this.$Message.warning("请选择要授权的用户！");
+            }else{//若已选择用户
+                //this.$httpPost('/man/saveTPortManagerMapO3',{"list":this.treeData,"tPortO3MapInfoVo":{"branches":this.selectItemArr,"halfBranches":this.indeterminateItemArr,"vcUserId":this.userId,"cManagerId":this.cManagerId}})
+                this.$httpPost('/man/saveTPortManagerMapO3',{"list":this.treeData,"tPortO3MapInfoVo":{"branches":this.selectItemArr,"vcUserId":this.userId,"cManagerId":this.cManagerId}})
+                    .then((res)=>{
+                        if(res.data.actionResult==1){
+                            this.$Message.success(res.data.data);
+                            this.selectMgeRight();
+                            this.selectMgeHasRight();
+                            this.btnDisabled=false;
+                        }else{
+                            this.$Message.warning(res.data.data);
+                        }
+                    })
+                    .catch(err => console.log('错误信息为:'+err))
+            }
+        },
+        //删除用户权限
+        delRight(){
+            this.btnHasRightDisabled=true;
+            //获取所有选中的
+            let selectItemArr=[];
+            let selectedItems=this.$refs.hasRightTree.getCheckedNodes();
+            for(let i=0;i<selectedItems.length;i++){
+                let obj={};
+                obj.id=selectedItems[i].id;
+                obj.type=selectedItems[i].type;
+                obj.pId=selectedItems[i].pId;
+                selectItemArr.push(obj);     
+            }
+
+            if(!this.userId){//若没选择用户
+                this.$Message.warning("请选择要授权的用户！");
+            }else{//若已选择用户
+                //this.$httpPost('/man/saveTPortManagerMapO3',{"list":this.treeData,"tPortO3MapInfoVo":{"branches":this.selectItemArr,"halfBranches":this.indeterminateItemArr,"vcUserId":this.userId,"cManagerId":this.cManagerId}})
+                this.$httpPost('/man/deleteTPortManagerMapO3',{"list":this.treeHasRightData,"tPortO3MapInfoVo":{"branches":selectItemArr,"vcUserId":this.userId,"cManagerId":this.cManagerId}})
+                    .then((res)=>{
+                        if(res.data.actionResult==1){
+                            this.$Message.success(res.data.data);
+                            this.selectMgeRight();
+                            this.selectMgeHasRight();
+                            this.btnHasRightDisabled=false;
+                        }else{
+                            this.$Message.warning(res.data.data);
+                        }
+                    })
+                    .catch(err => console.log('错误信息为:'+err))
+            }
+        },
+         //单选用户行高亮时，获取userID
+        singleSelect(currentRow,oldCurrentRow){
+            this.userId=currentRow.vcUserId;
+            this.cManagerId=currentRow.cManagerId;
+            this.selectMgeRight();
+            this.selectMgeHasRight();
+        },
+
+          //页码改变时的回调
+        pageNumChange (page){
+            this.pageNum = page;
+            this.selectUserInfo();
+        },
+        //每页数据条数改变时的回调
+        pageSizeChange (pageSize){
+            this.pageSize = pageSize;
+            this.selectUserInfo();
+        },
+        //查询所有经理职位
+        selectPostions(){
+            //let url = `/user/selectPosition`;
+            //this.$httpGet(url).then((res) => {               
+            this.$httpGet(`/man/selectManagerList`,null).then((res) => {               
+                this.positions = res.data;
+            })
+        },
+        //获取用户信息列表
+        selectUserInfo(pageNum){
+            let pageNumber=this.pageNum;
+            if(pageNum){
+                pageNumber=1
+            }else{
+                pageNumber=this.pageNum;
+            }
+            this.loading=true;
+            var url = `/man/selectUserManagerModel?pageNum=${pageNumber}&pageSize=${this.pageSize}&vcUserId=${this.userName}`;
+            this.$httpGet(url).then((res) => {               
+                this.totalSize = res.data.total;
+                this.tableData=res.data.list;
+                this.loading=false;
+            })
+        },
+        //查询用户权限
+        selectMgeRight(){
+            if(!this.userId){//若没选择用户
+                this.$Message.warning("请选择要授权的用户！");
+            }else{
+                this.emptyText="";
+                this.showSpin=true;
+                this.$httpGet(`/man/selectJurisdictionTree?vcFundName=${this.accountName.toUpperCase()}&vcUserId=${this.userId}&cManagerId=${this.cManagerId}`)
+                    .then((res) => {
+                        if(res.data){
+                            this.treeData=res.data;
+                            this.showSpin=false;
+                            if(this.treeData.length==0){
+                                this.emptyText="该用户暂无权限";
+                            }
+                        }                
+                    })
+            }
+        },
+        //查询用户已有权限
+        selectMgeHasRight(){
+            this.emptyHasRightText="";
+            this.showHasRightSpin=true;
+            this.$httpGet(`/man/selectHaveJurisdictionTree?vcUserId=${this.userId}&cManagerId=${this.cManagerId}`)
+                .then((res) => {
+                    if(res.data){
+                        this.treeHasRightData=res.data;
+                        this.showHasRightSpin=false;
+                        if(this.treeHasRightData.length==0){
+                            this.emptyHasRightText="该用户暂无权限";
+                        }
+                    }                
+                })
+        }        
+    },
+    computed:{
+        treeHeight(){
+            return this.tableHeight + 32;
+        }
+    },
+    created(){
+        this.selectUserInfo();
+        this.selectPostions();
+    },
+    mounted(){
+        this.tableHeight=this.$refs.tableWrap.getBoundingClientRect().height;
+        window.addEventListener('resize', () => {//动态调整高度
+            this.tableHeight=this.$refs.tableWrap.getBoundingClientRect().height;
+        })
+    },
+    components:{
+        DatarightTree,
+        DatarightTreeTwo
+    }
+}
+</script>
+<style scoped>
+    .wrapper{
+        height: 100%;
+    }
+    /*tree高度*/
+    .tree-wrapper-height,.table-wrapper-height{
+        /* height:calc(100vh - 140px); */
+        height: 100%;
+    }
+    .center-table{
+        height: calc(100% - 72px);
+    }
+    .tree-wrapper{        
+        overflow-y: auto;
+    }
+    /* tree的尾行不显示 */
+    .right-tree{
+        height: calc(100% - 36px);
+    }
+    .ivu-table-wrapper{
+        height: 100%;
+    }
+    /*弹框的select*/
+    .user-account >>> .ivu-select-selection{
+        height: 34px;
+    }
+
+    /* 表格中的select */
+    .table-wrapper >>> .ivu-table .ivu-table-cell .ivu-btn{
+        margin: 1px 0 1px 15px!important;
+    }
+    
+</style>
+
+

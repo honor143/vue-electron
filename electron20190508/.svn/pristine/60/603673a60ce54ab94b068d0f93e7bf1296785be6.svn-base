@@ -1,0 +1,324 @@
+<template>
+  <div class="login-wrapper">
+    <div class="img-wrapper"></div>
+    <div class="login-form">
+        <Form class="form-style" ref="formInline" :model="formInline" :rules="ruleInline">
+            <div class="logo"></div>
+            <FormItem prop="username" class="item-marginBot" style="margin-bottom:20px;">
+                <Input class="login-input" type="text" size="small" v-model="formInline.username" placeholder="用户名">
+                    <Icon type="ios-person-outline" slot="prepend"></Icon>
+                </Input>
+            </FormItem>
+            <FormItem  class="item-marginBot" prop="password">
+                <Input class="login-input" type="password" size="small" @on-enter="handleSubmit('formInline')"  v-model="formInline.password" placeholder="密码">
+                    <Icon type="ios-lock-outline" slot="prepend"></Icon>
+                </Input>
+            </FormItem>
+            <FormItem class="item-marginBot" prop="remember-me">
+                <!-- <CheckboxGroup v-model="formInline.remember-me"> -->
+                    <Checkbox label="记住密码" v-model="rememberPass">记住密码</Checkbox>
+                <!-- </CheckboxGroup> -->
+            </FormItem>
+            <FormItem class="btn-wrapper">
+                <Button id="login-button" type="primary" size="small" :disabled="isUpdate" @click="handleSubmit('formInline')">登录</Button>
+            </FormItem>
+            <!--<FormItem class="btn-wrapper">
+                <Button class="login-button" type="primary" size="small" @click="handleUpdate">检查更新</Button>
+            </FormItem>-->
+            <span v-if="messageShow">{{updateMessage}}</span>
+            <Progress v-if="downloadPercent > 0" :percent="downloadPercent" status="active" />
+               <!--  @on-ok="okUpdate"
+                @on-cancel="cancelUpdate" -->
+            <!-- <Modal
+                title="更新提示"
+                v-model="modalshow"
+                :closable="false"
+                :mask-closable="false"
+                class-name="vertical-center-modal">
+                是否确认更新？
+                <div slot="footer">
+                    <Button type="primary" size="small" @click="okUpdate">确定</Button>
+                </div>
+            </Modal> -->
+             <Modal
+                title="更新提示"
+                v-model="modalshow"
+                @on-ok="okUpdate"
+                @on-cancel="cancelUpdate"
+                class-name="vertical-center-modal">
+                是否确认更新？
+            </Modal>
+        </Form>
+    </div>
+  </div>
+</template>
+
+<script>
+    // import { mapState,mapGetters,mapMutations,mapActions } from 'vuex'
+    // import {setCookie,getCookie} from '../util/cookie.js'
+    import { authBaseURL } from '../ajax/config.js'
+    const {ipcRenderer} = require('electron')
+    import Cookies from 'js-cookie'
+    export default {
+        data () {
+            return {
+                isUpdate:true,
+                rememberPass:false,
+                formInline: {
+                    'username': '',
+                    'password': '',
+                    //'remember-me':true          
+                },
+                updateMessage:'',
+                messageShow:false,
+                modalshow:false,
+                ruleInline: {
+                    'username': [
+                        { required: true, message: '请输入用户名', trigger: 'blur' }
+                    ],
+                    'password': [
+                        { required: true, message: '请输入密码.', trigger: 'blur' },
+                        { type: 'string', min: 6, message: '密码长度不能少于6位', trigger: 'blur' }
+                    ],
+                    'remember-me': [
+                        { type: 'boolean'}
+                    ],
+                },
+                downloadPercent:0
+            }
+        },
+
+        methods: {
+            logout(){
+                this.$httpGet('/logout').then((res) => {
+                    console.log(res.data);
+                })
+            },
+            handleUpdate(){
+                console.log("checkForUpdate")
+                ipcRenderer.send("checkForUpdate");
+            },
+            handleSubmit(name) {//提交用户信息
+                this.$refs[name].validate((valid) => {
+                    if (valid) {
+                        let form = this.$refs['formInline'].$el;
+                        let formData = new FormData(form);
+                        formData.append('username', this.formInline.username);
+                        formData.append('password', this.formInline.password);
+                        formData.append('remember-me', true);
+                        console.log("xmlHttp")
+                        //this.$httpPost('/login', formData).then((res) => {
+                        this.$httpPost('/login',formData,authBaseURL).then((res) => {
+                            console.log(res.data);
+                            if(res.data.actionResult===1){
+                                this.$Message.success('登录成功!');
+                                //this.$httpGet(`/getUserInfo`).then((result) => {
+                                this.$httpGet(`/getUserInfo`,null,authBaseURL).then((result) => {
+                                    //console.log(result);
+                                    
+                                    
+                                    // Cookies.set('userId',res.data.userId)
+                                    //登录成功后向localStorage中存储密码、账号、是否记住密码
+                                    if(this.rememberPass){ //选中rememberPass时需要存储密码
+                                        window.localStorage.setItem("rememberPass",true);
+                                        window.localStorage.setItem("username",this.formInline.username);
+                                        window.localStorage.setItem("password",this.formInline.password);
+                                    }else{ //未选中rememberPass时删除密码
+                                        window.localStorage.setItem("rememberPass",false);
+                                        window.localStorage.setItem("username",this.formInline.username);
+                                        window.localStorage.removeItem("password"); 
+                                    }
+
+                                    this.$store.commit('SAVE_USERINFO',result.data);
+                                    // this.$store.dispatch('Login', result.data);
+                                   
+                                    //使用上次设置改变class进行换肤
+                                    document.getElementsByTagName('body')[0].className='appTheme'+ result.data.vcClassName;
+                                    ipcRenderer.sendSync('setCookie',result.data.userId);
+                                    
+                                    
+                                })
+                            }else{//登录失败提醒
+                                this.$Message.error(res.data.data);
+                            }
+                            // if(!res.data.userId){//登录失败提醒
+                            //     this.$Message.error(res.data.data);                                
+                            // }else{//登录成功存储用户信息并进行跳转
+                            //     this.$Message.success('登录成功!');
+                            //     //设置cookie
+                            //     // setCookie('userId',res.data.userId);
+                            //     // 向主进程发送消息
+                            //     // console.log("向主进程发送消息setCookie")
+                            //     ipcRenderer.sendSync('setCookie',res.data.userId)
+                            //     // Cookies.set('userId',res.data.userId)
+                            //     //登录成功后向localStorage中存储密码、账号、是否记住密码
+                            //     if(this.rememberPass){ //选中rememberPass时需要存储密码
+                            //         window.localStorage.setItem("rememberPass",true);
+                            //         window.localStorage.setItem("username",this.formInline.username);
+                            //         window.localStorage.setItem("password",this.formInline.password);
+                            //     }else{ //未选中rememberPass时删除密码
+                            //         window.localStorage.setItem("rememberPass",false);
+                            //         window.localStorage.setItem("username",this.formInline.username);
+                            //         window.localStorage.removeItem("password"); 
+                            //     }
+                            //     this.$store.dispatch('Login', res.data);
+                            //     this.$router.push({ path: '/layout' });
+                            // }
+                        }).catch(() => {
+                            this.$Message.error('登录失败!');
+                        })
+                    } else {
+                        this.$Message.error('登录失败!');
+                    }
+                })
+            },
+            okUpdate(){
+                ipcRenderer.send("isUpdateNow");
+                this.modalshow = false;
+            },
+            cancelUpdate(){
+                console.log('cancel')
+                this.isUpdate = false;
+                this.modalshow = false;
+            }
+        },
+        created(){
+            //在created钩子中初始化输入框
+            console.log(window.localStorage.getItem("username"))
+            if(window.localStorage.getItem("username")){
+                this.formInline.username = window.localStorage.getItem("username");
+            }
+            if(window.localStorage.getItem("username")){
+                this.formInline.password = window.localStorage.getItem("password");
+            }
+            if(window.localStorage.getItem("rememberPass")){
+                this.rememberPass = true;
+            }else{
+                this.rememberPass = false;
+            }
+            // 自动检查更新
+            this.handleUpdate();
+            // 监听主进程关闭消息
+            ipcRenderer.on('logout', (event, message) => {
+                this.logout();
+                // console.log('message from Main Process: ' , message);  // Prints Main Process Message.
+            });
+            ipcRenderer.on("message", (event, text) => {
+                this.updateMessage = text;
+               /* error: '检查更新出错',
+                    checking: '正在检查更新……',
+                    updateAva: '检测到新版本，正在下载……',
+                    updateNotAva: '现在使用的就是最新版本，不用更新',
+                if(text == "检查更新出错"){
+
+                }*/
+                this.messageShow = true;
+                console.log(this.updateMessage)
+                if(text.indexOf("不用更新") > -1){
+                    this.messageShow = false;
+                    this.isUpdate = false;
+                }
+                if(text.indexOf("更新出错") > -1){
+                    this.isUpdate = false;
+                }
+            });
+            //注意：“downloadProgress”事件可能存在无法触发的问题，只需要限制一下下载网速就好了
+            ipcRenderer.on("downloadProgress", (event, progressObj)=> {
+                this.downloadPercent = progressObj.percent.toFixed(2) || 0;
+            });
+            ipcRenderer.on('cookieDone',() => {
+                console.log("cookieDone")
+                this.$router.push({ path: '/layout' });
+            })
+            ipcRenderer.on("isUpdateNow", () => {
+                console.log("isUpdateNow");
+                this.messageShow = false;
+                this.modalshow = true;
+                // ipcRenderer.send("isUpdateNow");
+            });
+
+
+        }
+    }
+</script>
+
+<style scoped>
+    .login-wrapper{/*登录页面背景样式 */
+        position: fixed;
+        height: 100%;
+        width: 100%;
+        background:rgb(30,30,30);
+    }
+    .img-wrapper{
+        position: relative;
+        height: 100%;
+        width: calc(100% - 200px);
+        background:url('./../assets/login2_02.jpg') no-repeat;
+        background-size: 100% 100%; 
+    }
+    .login-form {/*登录页面中form样式 */
+        position: absolute;
+        right:0;
+        top:0;
+        bottom: 0;
+        width: 220px;
+        height: 100%;       
+        padding: 20px 20px 0;
+        background:rgb(30,30,30);
+    }
+    .form-style{
+        position: absolute;
+        top:50%;       
+        transform: translateY(-136px);
+        width: 180px;
+        height:263px;
+    }
+    .logo{
+        width:78px;
+        height: 86px;
+        margin: auto;
+        margin-bottom: 20px;
+        background:url('./../assets/logo.png') no-repeat;
+        background-size: contain;
+    }   
+    .ivu-checkbox-wrapper{
+        color: #fff;
+    }    
+    .btn-wrapper{/*按钮wrapper样式*/
+        text-align: right;
+        margin-bottom: 0;
+    }
+     
+    .btn-wrapper #login-button{
+        height: 30px;
+        /* background-color: #2D8CF0;
+        border-color: #2D8CF0; */
+        background-color: #2D8CF0;
+        border-color: #2D8CF0;
+        width: 100%;
+    }
+    .btn-wrapper #login-button:hover{
+        background-color: rgb(103, 168, 238)!important;
+        border-color: rgb(103, 168, 238);
+        width: 100%;     
+    }
+    .btn-wrapper .ivu-btn-primary:hover{
+        background-color: rgb(103, 168, 238)!important;
+        border: 1px solid #515151;
+        color:#000;
+    }
+    #login-button:disabled,#login-button:disabled:hover{
+        background: #555;
+        border: #555;
+        color:#333;
+    }
+    .login-input,.login-input >>> input{
+        height: 30px;
+    }
+    .ivu-form-item.item-marginBot{/*formitem样式 */
+        margin-bottom: 10px;
+    }
+    .ivu-icon{/*form中图标样式 */
+        font-size: 16px;
+    }   
+</style>

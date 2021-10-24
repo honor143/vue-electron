@@ -1,0 +1,10 @@
+// 字体颜色
+$fontwhite:#fff;
+$fontyellow:#FFEC8B;
+
+//成功、失败提醒颜色
+$successcolor:#19be6b;
+$waringcolor:#ff0000;
+
+//局部背景色
+$bgcolor:rgba(66,66,66,0.1);

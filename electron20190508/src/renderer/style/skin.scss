@@ -1,0 +1,268 @@
+// 绿色主题
+.appThemeGreen{
+    //模块标题样式
+    .sec-header h3::before{
+        background: rgb(26,68,68);
+    }
+    //权限部分标题样式
+    .func-wrapper .section-title{
+        color: rgb(255,235,200)!important;
+    }
+    .func-wrapper .section-title::before{
+        background: rgb(26,68,68);
+    }
+    //权限tab样式
+    .role-tab-wrapper .ivu-tabs-tab::before{
+        background:rgb(26,68,68);
+    }
+    .role-tab-wrapper .ivu-tabs-tab.ivu-tabs-tab-focused::before{
+        background:rgb(68,150,139)!important;
+    }
+    .role-tab-wrapper .ivu-tabs-tab:hover::before{
+        background:rgb(68,150,139);
+    }
+    //tab样式
+    // .content-info >>>.ivu-tabs-tab::before{
+    //     background: rgb(26,68,68);
+    // }
+    //layout样式
+    .layout{
+        background:rgb(0,7,7);
+    }
+    .layout .ivu-layout-header{
+        background: rgb(14,36,36);
+        color:#fff;
+    }
+    .layout .ivu-layout-footer{
+        background: rgb(14,36,36);
+    }
+    /*sider背景*/
+    .layout .ivu-layout .ivu-layout-has-sider .my-side .ivu-layout-sider-children{
+        /* background: #212121; */
+        background:rgb(9,28,28);
+        opacity:0.9;
+    }
+    //顶部梯形tag样式
+    .tag .tag-content .my-tag::before{
+        background: rgb(26,68,68);
+    }
+    //底部tag样式
+    .tags{
+        background: rgb(14,36,36);
+    }
+    .tags-li{
+        background: rgb(23,56,56);
+        color: rgb(255,211,141);
+    }
+    .tags-li:not(.active):hover {
+        background:rgb(68,150,139)!important;
+    }
+    .tags-li.active {
+        background:rgb(68,150,139);
+    }
+    .tags-li-title {
+        color: rgb(255,211,141);
+    }   
+    .tags-li.active .tags-li-title {
+        color: #000;
+    }
+    .tags-li .tags-li-title:hover{
+        color: #000!important;
+    }
+    //左侧sidemenu样式
+    /*collapse背景*/
+    .side .ivu-collapse{
+        background: rgb(9,28,28);
+        border: 0 solid #dcdee2;       
+    }
+    /*collapse-content背景*/
+    .side .ivu-collapse-content{
+        background: rgb(23,56,56);
+    }
+    //选中样式
+    .side .ivu-tree-title-selected{
+        background-color: rgb(81,171,160);
+    }
+    .side .ivu-tree-title:hover{
+        background-color: rgb(81,171,160);
+    }
+    /* input样式 */
+    .ivu-input{
+        background-color:rgb(110,108,75);
+        border-color: rgb(110,108,75);
+    }
+    /* btn样式 */
+    .ivu-btn-primary{
+        background-color:rgb(81,171,160);
+        border: 1px solid rgb(81,171,160);
+        color:#fff;
+    }
+    .ivu-btn-primary:hover{
+        background-color:rgb(23,56,56);
+        border: 1px solid rgb(23,56,56);
+        color:#fff;
+    }
+    /*每页页码下拉框、多选框、多选框聚焦样式*/
+    .ivu-select-selected-value,.ivu-select-selection,.ivu-select-multiple .ivu-select-item-focus{
+        background-color: rgb(20,53,53);
+        color: #fff;
+    }
+    /*分页>>>箭头样式*/
+    .ivu-select-dropdown{
+        background-color: rgb(20,53,53);
+    }
+    //dropdown样式
+    .ivu-select-dropdown .ivu-dropdown-menu .ivu-dropdown-item:hover{
+        background:rgb(28,148,147);
+    }
+    /*下拉框样式*/
+    .ivu-select-selection input{
+        background-color:rgb(20,53,53);
+        color: #fff;
+    }
+    .ivu-select-placeholder{
+        background-color:rgb(20,53,53);
+    }
+    // table样式
+    .ivu-table{
+        border: 1px solid rgb(22,70,73);
+    }
+}
+
+//灰色主题
+.appThemeGray{
+    //模块标题样式(梯形背景色)
+    .sec-header h3::before{
+        //background: #292929;
+        background:#383838;
+    }   
+    //权限部分标题样式(字体颜色)
+    .func-wrapper .section-title{
+        color: #EE8400!important;
+    }
+    //权限部分标题样式(梯形背景色)
+    .func-wrapper .section-title::before{
+        // background: #383838;
+        background:rgba(102, 102, 102, 0.7);
+    }
+    //权限tab样式
+    // .role-tab-wrapper .ivu-tabs-tab::before{
+    //     background:rgba(102, 102, 102, 0.7);
+    // }
+    // .role-tab-wrapper .ivu-tabs-tab.ivu-tabs-tab-focused::before{
+    //     background:#EE8400!important;
+    // }
+    // .role-tab-wrapper .ivu-tabs-tab:hover::before{
+    //     background:#EE8400;
+    // }
+    //layout样式(背景)
+    .layout{
+        background:#000;
+    }
+    //layout-header样式(背景、字体颜色)
+    .layout .ivu-layout-header{
+        background: #232323;
+        color:#fff;
+    }
+    //layout-footer样式(背景)
+    .layout .ivu-layout-footer{
+        background: #232323;
+    }
+    /*sider背景*/
+    .layout .ivu-layout .ivu-layout-has-sider .my-side .ivu-layout-sider-children{
+        background: #212121;
+        // background:rgb(9,28,28);
+        opacity:0.9;
+    }
+    //顶部梯形tag样式(梯形)
+    .tag .tag-content .my-tag::before{
+        background: #232323;;
+    }
+    //底部tag样式
+    .tags{
+        background: rgba(155,155,155, 0.1);
+    }
+    //底部tag-li样式
+    .tags-li{
+        background: #414141;
+        color: #F3F3F3;
+    }
+    //tag-li划过样式
+    .tags-li:not(.active):hover {
+        background: #646464!important;
+    }
+    //tag-li激活样式
+    .tags-li.active {
+        background:#333333;
+        color: rgb(245,173,3)!important;
+    }
+    //tags-li-title样式
+    .tags-li-title {
+        color: #bdbdbd;
+    }
+    //激活的tags-li-title样式
+    .tags-li.active .tags-li-title {
+        color: #fff!important;
+    }
+    //左侧sidemenu样式
+    /*collapse背景*/
+    .side .ivu-collapse{
+        background: #292929;
+        border: 0 solid #dcdee2;       
+    }
+    /*collapse-content背景*/
+    .side .ivu-collapse-content{
+        background:#212121;
+    }
+    //选中样式
+    .side .ivu-tree-title-selected{
+        background-color: #181818;
+    }
+    //ivu-tree-title划过样式
+    .side .ivu-tree-title:hover{
+        background-color: #181818;
+    }
+    /* input样式 */
+    .ivu-input{
+        background-color:#333;
+        border-color: #444;
+    }
+    /* btn样式 */
+    .ivu-btn-primary{
+        background-color:#333;
+        border: 1px solid #333;
+        color:#fff;
+    }
+    //btn划过样式
+    .ivu-btn-primary:hover{
+        background-color:#515151;
+        border: 1px solid #515151;
+        color:#fff;
+    }
+    /*每页页码下拉框、多选框、多选框聚焦样式*/
+    .ivu-select-selected-value,.ivu-select-selection,.ivu-select-multiple .ivu-select-item-focus{
+        background-color: #383838;
+        color: #fff;
+    }
+    /*分页>>>箭头样式*/
+    .ivu-select-dropdown{
+        background-color: #333;
+    }   
+    //dropdown样式
+    .ivu-select-dropdown .ivu-dropdown-menu .ivu-dropdown-item:hover{
+        background:#000;
+    }   
+    /*下拉框样式*/
+    .ivu-select-selection input{
+        background-color: #333;
+        color: #fff;
+    }
+    //ivu-select-placeholder样式
+    .ivu-select-placeholder{
+        background-color: #333;
+    }   
+    // table样式
+    .ivu-table{
+        border: 1px solid #333;
+    }
+}

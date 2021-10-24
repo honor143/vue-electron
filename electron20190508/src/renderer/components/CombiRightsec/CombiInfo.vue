@@ -1,0 +1,212 @@
+<template>
+    <div class="table-wrapper-height wrapper">
+        <!--<div class="func-wrapper">
+             <label for="">&nbsp;筛选:&nbsp;</label>
+            <Input class="section-search" size="small" v-model="userName" :placeholder="placeholder" clearable @on-change="selectUserInfo"/> 
+            <ButtonGroup>
+                <Button type="primary" size="small" @click="refresh">刷新</Button>
+                <Button type="primary" size="small" @click="edit">编辑</Button>
+                <Button type="primary" size="small" @click="save">保存</Button>
+                <Button type="primary" size="small" @click="cancel">取消</Button>
+            </ButtonGroup>
+        </div>-->
+        <div class="table-wrapper" ref="tableWrap">
+            <Table :loading="loading" stripe highlight-row ref="selection" :height="tableHeight" :columns="columns" :data="data"></Table>
+            <Page size="small" :total="totalSize" :current="pageNum" @on-page-size-change="pageSizeChange" @on-change="pageNumChange" :page-size="pageSize" :page-size-opts="pageOpts" show-total show-elevator show-sizer></Page>
+        </div>
+        
+    </div>
+</template>
+<script>
+import AssetExpand from './CombiComponent/CombiExpand.vue'
+export default {
+    name:'page_195',
+    data () {
+        return {
+            // 组合配置类型
+            combiSetTypeList:[],
+            //分页数据
+            pageSize:30,
+            totalSize:null,
+            pageNum:1,
+            pageOpts:[30,40,50],
+            
+            timer:null,
+            loading:false,
+            formValidate: {
+                id: '',
+                vcDisplayName: '',
+                vcEmail: '',
+                vcPassword: '',
+                vcRemark: ''
+            },
+            dialogTitle:'新建',
+            modalShow: false,
+            tableHeight:0,
+            userName:'',
+            placeholder:'请输入用户名称',
+            columns: [
+                {
+                    type: 'expand',
+                    width: 50,
+                    render: (h, params) => {
+                        return h(AssetExpand, {
+                            props: {
+                                row: params.row,
+                                combiSetTypeList:this.combiSetTypeList
+                            },
+                            on: {
+                                    sumbitSuccess: () => {
+                                            this.selectCombiInfo()
+                                        }
+                                    }
+                        })
+                    }
+                },
+                {
+                    title: '账户编号',
+                    key: 'lFundId',
+                    width:80
+                },
+                {
+                    title: '账户名称',
+                    key: 'vcFundName',
+                    minWidth:120
+                },
+                {
+                    title: '资产单元编号',
+                    key: 'lAssetId',
+                    width:100
+                },
+                {
+                    title: '资产单元名称',
+                    key: 'vcAssetName',
+                    minWidth:130,
+                    ellipsis:true,
+                    tooltip:true
+                },
+                {
+                    title: '组合编号',
+                    key: 'id',
+                    width:80
+                },
+                {
+                    title: '组合名称',
+                    key: 'vcCombiName',
+                    minWidth:130,
+                    ellipsis:true,
+                    tooltip:true
+                },
+                {
+                    title: '组合状态',
+                    key: 'vcCombiStatusName',
+                    width:80
+                },
+                {
+                    title: '是否有效',
+                    key: 'vcIsValidName',
+                    width:80,
+                    render:(h,params) => {
+                            let self = this;
+                            if(params.row.cIsValid == '1'){
+                                return h('span', '有效')
+                            }else{
+                                return h('span', '无效')
+                            } 
+                        }
+                },
+                {
+                    title: '组合配置类型',
+                    key: 'vcConfig',
+                    width:100
+                },
+                {
+                    title: '默认会计分类',
+                    key: 'vcInvestTypeName',
+                    width:100
+                },
+                {
+                    title: '创建日期',
+                    key: 'lCreateDate',
+                    width:80
+                },
+                 {
+                    title: '结束日期',
+                    key: 'lEndDate',
+                    width:80
+                },
+                {
+                    title: '备注',
+                    key: 'vcRemarks',
+                    minWidth:100,
+                    ellipsis:true,
+                    tooltip:true
+                }
+            ],
+            data: []
+        }
+    },
+    created(){
+        this.selectCombiInfo();
+        this.selectDicFundEquity();
+    },
+    mounted(){
+        this.tableHeight=this.$refs.tableWrap.getBoundingClientRect().height;
+        window.addEventListener('resize', () => {//动态调整高度
+            this.tableHeight=this.$refs.tableWrap.getBoundingClientRect().height;
+        })
+    },
+    methods: {
+        getTableHeight(){
+            this.tableHeight=this.$refs.tableWrap.getBoundingClientRect().height - 30;
+        },
+       
+         //页码改变时的回调
+        pageNumChange (page){
+            this.pageNum = page;
+            this.selectCombiInfo();
+        },
+        //每页数据条数改变时的回调
+        pageSizeChange (pageSize){
+            this.pageSize = pageSize;
+            this.selectCombiInfo();
+        },
+        //获取资产单元信息列表
+        selectCombiInfo(){
+            this.$httpGet(`/combi/selectCombis?pageNum=${this.pageNum}&pageSize=${this.pageSize}`).then((res) => {
+                this.loading=true;
+                this.totalSize = res.data.total;
+                this.data=res.data.list;
+                this.loading=false;
+               
+            })
+        },
+        
+        refresh(){
+            this.pageNum = 1;
+            this.selectCombiInfo();
+        },
+        // 请求组合配置类型
+        selectDicFundEquity(){
+            this.$httpGet('/dic/selectDicCombiConfig').then((res) => {
+                this.combiSetTypeList= res.data;
+            })
+        },
+    },
+    components:{
+        AssetExpand
+    }
+}
+</script>
+<style scoped>
+    /*table相关样式*/
+    .table-wrapper-height,.ivu-table-wrapper{/*table高度*/
+        /* height:calc(100vh - 165px); */
+        height: 100%;
+    }
+    .table-wrapper,.table-wrapper .ivu-table-wrapper{
+        height: calc(100% - 43px);
+    }
+</style>
+
+

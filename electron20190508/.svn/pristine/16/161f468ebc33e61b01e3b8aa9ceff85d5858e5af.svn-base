@@ -1,0 +1,552 @@
+<template>
+     <div class="layout">
+        <Layout>
+            <Header class="my-header">
+                <!--<Icon  type="md-menu" size="24"></Icon>-->
+                <!-- <p class="version-detail">版本2019.01.16</p> -->
+                <div class="user-header">                   
+                    <span>欢迎：{{userName}}</span>
+                    <Poptip placement="bottom" trigger="hover" width="100" style="margin-right:30px;">
+                        <Icon type="md-contact" size="18"/>
+                        <div class="poptip-content" slot="content">
+                            <div class="poptip-select" @click="showUpdatePass">修改密码</div>
+                            <div class="poptip-select" @click="logout">退出登录</div>
+                        </div>
+                       
+                    </Poptip>
+                    <!-- <input type="file" @change="screenShot" ref="fileInput" style="cursor:pointer!important;position:fixed;right:20px;top:8px;width:18px;height:18px;z-index:12;"> -->
+                    <Icon class="cursor" type="md-crop" title="截屏" color="#fff" size="18" @click="screenShot" style="cursor:pointer;position:fixed;right:20px;top:8px;z-index:10;"/>
+                </div>
+                <Modal v-model="updatePassModal" title="修改密码" @on-ok="handleSubmit('updatePassForm')" :loading="updatePassLoading">
+                     <Form  ref="updatePassForm" :model="formData" :rules="ruleCustom" :label-width="100">
+                        <FormItem label="原密码："  prop="oldPass">
+                            <Input class="setbit-input" type="password" size="small" v-model="formData.oldPass" placeholder="请输入原密码"></Input>
+                        </FormItem>
+                        <FormItem label="新密码：" prop="newPass">
+                            <Input class="setbit-input" type="password" size="small" v-model="formData.newPass" placeholder="请输入新密码"></Input>
+                        </FormItem>
+                        <FormItem label="确认新密码" prop="newPassTwo">
+                            <Input class="setbit-input" type="password" size="small" v-model="formData.newPassTwo" placeholder="再次输入新密码"></Input>
+                        </FormItem>
+                    </Form>
+                </Modal>
+            </Header>
+            <Layout :style="{padding: '0'}">
+                <Content :style="{padding: '0'}"
+                    <Layout>
+                        <Sider class="my-side" ref="side1" collapsed-width="0" hide-trigger collapsible :width="sideWidth"  v-model="isCollapsed">
+                           <SideMenu></SideMenu>
+                        </Sider>
+                        <Content >
+                            <Layout>
+                                <Content class="view-content">
+                                    <div @click="collapsedSider" class="show-hide-side">
+                                        <Icon :class="rotateIcon" type="ios-play" />
+                                    </div>
+                                    <div class="show-content">
+                                        <keep-alive v-if="refresh" :include="keepAliveRoute">
+                                            <router-view v-if="$route.meta.keepAlive"></router-view>
+                                        </keep-alive>
+                                        <router-view v-if="!$route.meta.keepAlive"></router-view>
+                                    </div>
+                                   
+                                </Content>
+                                <footer>
+                                    <Tags></Tags>
+                                </footer>
+                            </Layout>
+                        </Content>
+                       
+                    </Layout>
+                   
+                </Content>
+            </Layout>
+            <!-- <Footer class="layout-footer-center">
+                <row>
+                    <Col span="8"><p class="text-left">泰康资产管理责任有限公司</p></Col>
+                    <Col span="8"><p class="text-center">{{date}}</p></Col>
+                    <Col span="8"><p class="text-right">版本2019.01.16</p></Col>
+                </row>
+            </Footer> -->
+        </Layout>
+    </div>
+</div>
+ <!-- <Dropdown @on-click="getTheme">
+                        <a href="javascript:void(0)" style="color:#fff;">
+                            <Icon type="md-shirt" size="18"/>
+                        </a>
+                        <DropdownMenu slot="list" style="color:#fff;text-align:center;">
+                            <DropdownItem :name="item.vcClassName" style="color:#fff;" v-for="item in skinList">
+                                <span :style="{'display':'inline-block','width':'12px','height':'12px','margin-right':'5px','background':item.vcColorCode}"></span>{{item.vcColorName}}
+                            </DropdownItem>
+
+                        </DropdownMenu>
+                    </Dropdown>-->
+                    <!--<Icon type="md-notifications-outline" color="#fff" size="18"/>-->
+                    <!--<Icon type="ios-shirt" color="#fff" size="18"/>-->
+                    <!--<Icon type="ios-settings" color="#fff" size="18"/>-->
+</template>
+
+<script>
+    import moment from 'moment';
+    import SideMenu from './SideMenu'
+    import Tags from './Tags.vue'
+    import { mapGetters } from 'vuex'
+    import { authBaseURL } from '../ajax/config';
+    const {ipcRenderer} = require('electron')
+
+    const electron = require('electron')
+    const desktopCapturer = electron.desktopCapturer
+    const electronScreen = electron.screen
+    const shell = electron.shell
+    const { dialog } = require('electron').remote
+
+    const fs = require('fs')
+    const os = require('os')
+    const path = require('path')
+    export default {
+        data () {
+             const validatePass = (rule, value, callback) => {
+                if (value === '') {
+                    callback(new Error('新密码不能为空！'));
+                } else {
+                    if (this.formData.newPass !== '') {
+                        if(this.formData.newPass == this.formData.oldPass){
+                            callback(new Error('新密码与原密码不能相同！'));
+                        }else{
+                            // 对第二个密码框单独验证
+                            this.$refs.updatePassForm.validateField('newPassTwo');
+                        }
+                    }
+                    callback();
+                }
+            };
+            const validatePassCheck = (rule, value, callback) => {
+                if (value === '') {
+                    callback(new Error('重复新密码不能为空！'));
+                } else if (value !== this.formData.newPass) {
+                    callback(new Error('新密码与重复新密码不一致！'));
+                } else {
+                    callback();
+                }
+            };
+            return {
+                shotIndex:0,
+                skinList:[],
+                formData:{
+                    oldPass:'',
+                    newPass:'',
+                    newPassTwo:''
+                },
+                 ruleCustom: {
+                    oldPass: [{ required: true, message: '原密码不能为空！', trigger: 'blur' }],
+                    newPass: [{ required: true, validator: validatePass, trigger: 'blur' }],
+                    newPassTwo: [{ required: true, validator: validatePassCheck, trigger: 'blur' }]
+                },
+                updatePassLoading:true,
+                updatePassModal:false,
+                sideShow:true,
+                sideHide:false,
+                sideWidth:200,
+                userName:'',
+                isCollapsed: false,
+                refresh:true,
+                date: new Date(),
+                timer:null
+            }
+        },
+        computed: {
+           rotateIcon () {
+                return this.isCollapsed ? 'show-side' : 'hide-side';
+            },
+            ...mapGetters(['keepAliveRoute'])
+        },
+        methods: {
+            // 用于测试使用（keepalive 的include刷新，证明不好使）
+           /* refreshHandle(){
+                console.log(this.$route)
+                this.$store.commit('DELETE_KEEPALIVE',  'page_' + this.$route.meta.id);
+                console.log(this.keepAliveRoute)
+                this.$nextTick(() => {
+                    this.$router.push(this.$route.path)
+                    this.$store.commit('ADD_KEEPALIVE',  'page_' + this.$route.meta.id);
+                    console.log(this.keepAliveRoute)
+                })
+                
+            },*/
+            //查询肤色信息
+            getSkinList(){
+                //this.$httpGet(`/user/selectSkinColor`)
+                this.$httpGet(`/user/selectSkinColor`,null,authBaseURL)
+                    .then((res) => {            
+                        if(res.status===200 && res.data){
+                            this.skinList=res.data;
+                        }                
+                    })
+            },
+            //换肤色
+            getTheme(val){
+                document.getElementsByTagName('body')[0].className='appTheme'+val;
+                let lSkinColorId;
+                this.skinList.forEach((item)=>{
+                    if(item.vcClassName===val){
+                        lSkinColorId=item.id;
+                    }
+                })
+                //this.$httpGet(`/user/updateSkinColor?lSkinColorId=${lSkinColorId}`)
+                this.$httpGet(`/user/updateSkinColor`,{lSkinColorId:lSkinColorId},authBaseURL)
+                    .then((res) => {            
+                        if(res.status===200 && res.data){
+                            this.$Message.success(res.data.data);
+                        }else{
+                            this.$Message.error(res.data.data);
+                        }                
+                    })
+            },
+            logout(){
+
+                //this.$httpGet('/logout').then((res) => {
+                this.$httpGet('/logout',null,authBaseURL).then((res) => {
+                    if(res.data.actionResult){
+                        this.$router.push('/login')
+                        this.$store.commit('CLEAR_USERINFO');
+                        this.$store.commit('CLEAR_USERROLES');
+                        // console.log(this.$store.state.User.userRoles)
+                        // console.log(this.$store.state.User.userInfo)
+                        ipcRenderer.send('logoutSuccess',function(){
+                            // console.log('logoutSuccesslogoutSuccesslogoutSuccesslogoutSuccesslogoutSuccess')
+                        });
+                    }else{
+                        this.$Message.error("退出登录失败！");
+                    }
+                }).catch(err => {
+                    this.$Message.error("退出登录失败！");
+                })
+            },
+           
+            
+            // 点击修改密码
+            showUpdatePass(){
+                this.updatePassModal = true;
+            },
+            // 提交密码修改
+            handleSubmit (name) {
+                this.$refs[name].validate((valid) => {
+                    if (valid) {
+                        // this.$Message.success("yanzng成功")
+                        var reqData = {
+                            // vcUserId: this.userId,
+                            userLastPassword:this.formData.oldPass,
+                            userNewPassword:this.formData.newPass
+                        }
+                        //this.$httpPost('/user/updateUserPassword', reqData).then((res) => {
+                        this.$httpPost('/user/updateUserPassword', reqData,authBaseURL).then((res) => {
+                            if(res.data.actionResult){
+                                this.$Message.success("修改密码成功！")
+                                this.updatePassModal = false;
+                                this.handleReset(name);
+                            }else{
+                                this.$refs.updatePassForm.validateField('newPassTwo',function(){
+                                    return '原始密码错误！'
+                                });
+                                
+                                this.updatePassLoading = false;
+                                this.$nextTick(() =>{
+                                    this.updatePassLoading = true;
+                                })
+                            }
+                           
+                        }).catch(() => {
+                            this.updatePassLoading = false;
+                            this.$nextTick(() =>{
+                                this.updatePassLoading = true;
+                            })
+                            this.$Message.error("修改密码失败！")
+                        }) 
+                    } else {
+                        this.updatePassLoading = false;
+                        this.$nextTick(() =>{
+                            this.updatePassLoading = true;
+                        })
+                        console.log("验证失败！")
+                        // this.$Message.error("验证失败！")
+                    }
+                })
+            },
+            // 重置修改表单
+            handleReset (name) {
+                this.$refs[name].resetFields();
+            },
+            // 侧边展开折叠
+            collapsedSider () {
+                this.$refs.side1.toggleCollapse();
+            },
+            // 底部时间
+            showNowDate(){
+                var _this = this; //声明一个变量指向vue实例this,保证作用域一致
+                this.timer = setInterval(function() {
+                    _this.date = moment(new Date()).format('YYYY-MM-DD HH:mm:ss')
+                }, 1000); 
+            },
+            //截图功能
+            screenShot(nodesc){
+                let that=this;
+                this.shotIndex++;
+                const thumbSize = this.determineScreenShotSize()
+                let options = { types: ['screen'], thumbnailSize: thumbSize }
+                desktopCapturer.getSources(options, function (error, sources) {
+                    if (error) return console.log(error)
+                    sources.forEach(function (source) {
+                        if (source.name === 'Entire screen' || source.name === 'Screen 1') {
+                            //console.log(os.tmpdir());
+                            dialog.showSaveDialog({
+                                title:'另存为',
+                                defaultPath:"捕获.PNG",
+                                filters: [
+                                    //{name: 'Images', extensions: ['JPG', 'PNG', 'GIF']},
+                                    {name: 'Images', extensions: ['JPG', 'PNG']},
+                                    // {name: 'Movies', extensions: ['mkv', 'avi', 'mp4']},
+                                    // {name: 'Custom File Type', extensions: ['as']},
+                                    // {name: 'All Files', extensions: ['*']}
+                                ]
+
+                            },function(path){
+                                if(path){
+                                    //const screenshotPath = path.join(os.tmpdir(), 'screenshot'+that.shotIndex+'.png')
+                                    fs.writeFile(path, source.thumbnail.toPNG(), function (error) {
+                                        if (error) return console.log(error)
+                                        //shell.openExternal('file://' + screenshotPath)
+                                        shell.openExternal('file://' + path)
+                                    })
+                                }
+                            })
+                            
+                        }
+                    })
+                })
+            },
+            //确定截图大小
+            determineScreenShotSize () {
+                const screenSize = electronScreen.getPrimaryDisplay().workAreaSize
+                const maxDimension = Math.max(screenSize.width, screenSize.height)
+                console.log("screenSize");
+                console.log(screenSize);
+                return {
+                    width: maxDimension * window.devicePixelRatio,
+                    height: maxDimension * window.devicePixelRatio
+                }
+            }
+        },
+        created(){
+            // console.log("layout111")
+            // console.log(this.keepAliveRoute)
+            // 获取vuex中的用户名
+            // this.userName = window.localStorage.getItem('user');
+            this.userName = this.$store.getters.userInfo.userName;
+            // console.log("this.$store.getters.userInfo.userName")
+            // console.log(this.$store.getters.userInfo)
+            // this.userName = this.$store.getters.userInfo.userName;  //刷新丢失
+            this.userId = this.$store.getters.userInfo.userId;
+            ipcRenderer.on('removeCookieSuc', function(event, arg) {
+                // console.log("removeCookieSuc")
+                this.$router.push('/login') // prints "pong"
+            });
+            //获取皮肤列表
+            // this.getSkinList();
+        },
+        components: { 
+            SideMenu,
+            Tags 
+        },
+        mounted(){
+            this.showNowDate();
+        },
+        //在vue实例销毁钱，清除我们的定时器
+        beforeDestroy () {
+            if(this.timer) {
+                clearInterval(this.timer);
+            }
+        }
+  }
+</script>
+
+<style>
+/*@import url('https://fonts.googleapis.com/css?family=Source+Sans+Pro');*/
+    
+    .layout{
+        /*border: 1px solid #d7dde4;*/
+        height: 100%;
+        position: relative;
+        border-radius: 4px;
+        overflow: hidden;
+        background: #333;
+         /*background:url(../assets/back_235.jpg) center center no-repeat #000;*/
+
+        background: #000;
+        background-repeat:no-repeat; 
+        background-size:100% 100%;
+        -moz-background-size:100% 100%;
+    }
+    .layout>.ivu-layout{
+        height: 100%;
+    }
+    .menu-icon{
+        position: absolute;
+        left: 10px;
+        top:15px; 
+        transition:all .5s ease;
+    }
+    .rotate-icon{
+        transform: rotate(-90deg);
+    }
+    .iconClass{
+        position: absolute;
+        left: 10px;
+        top:15px;
+        vertical-align:middle;
+
+    }
+    .layout .ivu-collapse-item:last-child>.ivu-collapse-content{
+        padding: 0;
+    }
+    .layout .ivu-collapse-content{
+        padding: 0;
+    }
+    
+    /*my样式*/
+    /*设置整体背景图片*/
+    /*.layout .ivu-layout{    
+        background:url(../assets/back_235.jpg) center center no-repeat #000;
+        background-repeat:no-repeat; 
+        background-size:100% 100%;
+        -moz-background-size:100% 100%;
+
+    }*/
+    /*设置头部样式*/
+    .layout .ivu-layout-header{
+        height:30px;    
+        background: #232323;
+        color:#fff;
+        position:relative;
+    }
+    /*设置footer样式*/
+    .layout .ivu-layout-footer{
+        background: #232323;
+        padding:0;
+        color: #fff;
+        font-size: 10px;
+        height:20px;
+        line-height:20px;
+    }
+    /*footer文字设置*/
+    .layout .ivu-layout-footer .text-left{
+        text-align: left;
+        padding-left: 30px;
+        color: #FFEC8B;
+    }
+    .layout .ivu-layout-footer .text-center{
+        text-align: center;
+        color: #FFEC8B;
+    }
+    .layout .ivu-layout-footer .text-right{
+        text-align: right;
+        padding-right: 30px;
+        color: #FFEC8B;
+    }
+    /*设置sider高度*/
+    .layout .ivu-layout .ivu-layout-has-sider{
+        height:calc(100vh - 70px);
+        padding: 5px 2px;
+    }
+    /*.layout .ivu-layout .ivu-layout-has-sider .ivu-layout .ivu-layout-content{
+        height:calc(100vh - 90px);
+    }*/
+    .ivu-layout-has-sider .ivu-layout {
+        height:100%;
+        padding-left: 8px;
+        position: relative;
+    }
+    /*sider背景*/
+    .my-side .ivu-layout-sider-children{
+        background: #212121;
+    }
+   
+    /*layout-content高度设置*/
+    /*.layout .ivu-layout-content{
+        padding:0;
+        height:calc(100vh - 70px);
+        padding-left: 8px;
+        position: relative;
+    }*/
+    .show-hide-side{
+        cursor:pointer;
+        display: inline-block;
+        width: 8px;
+        height: 80px;
+        border-radius: 0 4px 4px 0;
+        background: #666;
+        position: absolute;
+        left: 0;
+        top: calc(50% - 48px);
+        text-align: left;
+        /*vertical-align: middle: ;*/
+        line-height: 75px;
+        
+    }
+    .show-side,.hide-side{
+        font-size: 8px;
+        color: #eee;    
+    }
+    .hide-side{
+        transform: rotate(-180deg);
+    }
+    /**/
+    .version-detail{
+        height:30px;
+        line-height:30px;
+        position:absolute;
+        left:20px;
+    }
+    /*header中的用户信息设置*/
+    .user-header{
+        height:30px;
+        line-height:30px;
+        position:absolute;
+        right:50px;
+       
+    }
+    /*user-header中的span和icon间距以及垂直居中*/
+    .user-header span,.user-header i{
+        margin-left:5px;
+        vertical-align:middle;
+
+    }
+    .show-content{
+        width: calc(100% - 8px);
+        position: absolute;
+        right: 0px;
+        overflow-x: hidden;
+        overflow-y: auto;
+        height: calc(100% - 23px);
+        /*background-color: #bfa;*/
+    }
+    
+    .poptip-content{
+        /*width:70px;*/
+        height:50px;
+        background:#212121;
+    }
+    .poptip-select{
+        height:25px;
+        line-height:25px;
+        text-align:center;
+        cursor: pointer;
+    }
+    .poptip-select:hover{
+         background:#363636;
+    }
+    .poptip-select:active{
+        background:#363636;
+        color: #666;
+    }
+</style>

@@ -1,0 +1,1043 @@
+<template>
+  <div id="bond-tend">
+      <!--tags-->
+      <!--<div class="tag">
+        <div class="tagChildren"><Button type="primary" size="small" @click="preTag" icon="ios-arrow-back"></Button></div>
+        <div class="tag-wrapper clearfix" ref="tagWrapper">
+            <div ref="tags" class="tag-content clearfix">
+                <Tag class="my-tag"  v-for="item in issueInfoList" @click.native="tagClick(item.id)" :key="item.id" :name="item.vcTypeName">{{item.vcTypeName}}</Tag>
+            </div>
+        </div>
+        <div class="tagChildren"><Button type="primary" size="small" @click="nextTag" icon="ios-arrow-forward"></Button></div>
+      </div>-->
+      <div class="tag-wrapper">
+            <BondTag v-if="issueInfoList.length > 0" @clickTag="tagClick" :issueInfos="issueInfoList"></BondTag>
+      </div>
+    
+      <!--债券信息-->
+       <Layout class="in-content-layout">
+            <Content>
+                <BondLowDetail :issueInfo="issueInfo" :vcBidTarget="vcBidTarget" :cBidPrice="cBidPrice"></BondLowDetail>
+                <Row>
+                    <Col span="24">
+                        <span class="label-text">账户类型:</span>
+                        <Select v-model="model1" size="small" style="width:100px" @on-change="selectInstructionList">
+                            <Option v-for="item in accountTypeList" :value="item.value" :key="item.value">{{ item.label }}</Option>
+                        </Select>
+                        <ButtonGroup>
+                            <Button size="small" type="primary" v-if="userButtonRoles.saveLinkOrder_8_6" @click="filedSettingModel = true">定制列</Button>
+                            <Button size="small" type="primary">导入</Button>
+                            <Button size="small" type="primary" @click="editAcountHandle">修改账户</Button>
+                             <Button size="small" type="primary"  @click="saveManyInvestType" :loading="saveLoading">
+                                <span v-if="!saveLoading">保存</span>
+                                <span v-else>保存中</span> 
+                            </Button>
+                            <Button size="small" @click="deleteHandle" v-if="userButtonRoles.deleteInstructions_8_7" type="primary">删除</Button>
+                        </ButtonGroup>
+                        <ButtonGroup>
+                            <Button size="small" type="primary">试算风险</Button>
+                            <Button size="small" @click="submitHandle" v-if="userButtonRoles.submitSecondary_8_3" type="primary">提交</Button>
+                        </ButtonGroup>
+                    </Col>
+                </Row>
+                <div class="table-wrapper" ref="tableWrap">
+                    <!-- <Table stripe highlight-row @on-current-change="insRowChange" @on-selection-change="selectChange" :loading="tableLoading" :height="returnTableHeight" :columns="columns" :data="InstructionData"></Table> -->
+                    <el-table
+                        :data="InstructionData"
+                        stripe
+                        v-loading="instructionListLoading"
+                        class="instruc-table"
+                        :row-class-name="rowClassName"
+                        :height="returnTableHeight"
+                        @row-click="clickRow"
+                        highlight-current-row
+                        @current-change="isRowChange"
+                        header-row-class-name="my-el-header"
+                        style="width: 100%">
+                        <template v-for="(item ,index) in columns">
+                             <el-table-column
+                                :prop="item.key"
+                                :label="item.title"
+                                :width="100"
+                                align="center"
+                                v-if="item.columntype == 'nomal'" 
+                                show-overflow-tooltip  
+                                >
+                            </el-table-column>
+                            <el-table-column
+                                :prop="item.key"
+                                :label="item.title"
+                                :width="100"
+                                align="center"
+                                v-if="item.columntype == 'select'"
+                                >
+                                <template slot-scope="scope">
+                                    <span v-if="!scope.row.isEdit">{{scope.row[item.key]}}</span>
+                                    <Select v-if="scope.row.isEdit" size="small" @on-change="investTypeChange($event,editRowArr[scope.$index])" v-model="editRowArr[scope.$index].vcInvestTypeId" style="width:80px">
+                                        <Option v-for="item in investTypeList" :value="item.id" :key="item.id">{{ item.vcName }}</Option>
+                                    </Select>
+                                </template>
+                            </el-table-column>
+                           <!--  <el-table-column
+                                :prop="item.key"
+                                :label="item.title"
+                                :width="100"
+                                align="center"
+                                v-if="item.columntype == 'isedit'"   
+                                >
+                                <template slot-scope="scope">
+                                    <Input v-if="scope.row.isEdit" size="small" v-model="editRowArr[scope.$index][item.key]">
+                                        <span v-if="vcBidTarget == '1'" slot="append">%</span>
+                                        <span v-if="vcBidTarget != '1'" slot="append">元</span>
+                                    </Input>
+                                    <span v-if="!scope.row.isEdit && (item.key.indexOf('enBidPrice')>-1 || item.key=='enPriceFloor')">{{!!scope.row[item.key] ? (scope.row[item.key] + (vcBidTarget == '1'?'%':'元')) : null }}</span>
+                                    <span v-if="!scope.row.isEdit && (item.key.indexOf('enBidAmount')>-1 || item.key == 'lAmountLimit')">{{scope.row[item.key]}}</span>
+                                </template>
+                            </el-table-column> -->
+                            <el-table-column
+                                fixed="right"
+                                label="操作"
+                                align="center"
+                                class-name="fix-column-class"
+                                width="110"
+                                v-if="item.columntype == 'button'">
+                                <template slot-scope="scope">
+                                    <Button  type="primary" size="small" v-if="!scope.row.isEdit" @click="editTableRow(scope.row,scope.$index)">编辑</Button>
+                                    <Button v-if="scope.row.isEdit" type="primary" size="small" @click="saveTableRow(scope.row,scope.$index)">保存</Button>
+                                    <Button v-if="scope.row.isEdit" type="primary" size="small" @click="cancelTableRow(scope.row,scope.$index)">取消</Button>
+                                </template>
+                            </el-table-column>
+                        </template>
+                       
+                    </el-table>
+                </div>
+                <Page size="small" :total="totalSize" :current="pageNum" @on-page-size-change="pageSizeChange" @on-change="pageNumChange" :page-size="pageSize" :page-size-opts="pageOpts" show-total show-elevator show-sizer></Page>
+                <!--<div @click="collapsedSider" class="show-hide-side-bt">
+                     <Icon :class="rotateIcon" type="ios-play" />
+                </div>-->
+            </Content>
+            <Sider ref="sider" width="370" hide-trigger class="sider" :collapsed-width="0" collapsible v-model="isCollapsed">
+                 <!-- <BondDetail v-if="!isCollapsed" ref="detailTab" :vcCode="selectTag" :bondDetail="bondDetail"></BondDetail> -->
+                <row>
+                    <Col span="24">
+                        <div class="sec-header">
+                            <h3>流程状态</h3>
+                        </div>
+                    </Col>
+                    <!--<Col span="4">
+                        <Button @click="showProcessDetail" v-if="userButtonRoles.selectBpmnHtml_7_18" size="small" type="text">详细</Button>
+                    </Col>-->
+                </row>
+                <!-- v-show="!isCollapsed" -->
+                <div class="process-table-wrapper" ref="processTableWrap">
+                    <Table stripe highlight-row :height="processTableHeight" :loading="processTableLoading" :columns="processColumns" :data="processData"></Table>
+                </div> 
+                <!--<Table stripe highlight-row :height="processTableHeight" :columns="Columns" :data="bitData"></Table>-->
+                <div @click="collapsedSider" class="show-hide-side">
+                     <Icon :class="rotateIcon" type="ios-play" />
+                </div>
+                
+            </Sider>
+        </Layout>
+        
+        <Modal v-model="editAccountModel" @on-ok="editAccountOk" :loading="editAcountLoading" width="1000" title="修改账户">
+            <EditAccount v-if="editAccountModel" @submitsuc="submitSucess" @submiterror="submitError" ref="editAccount" :bondInfo="bondInfo">
+            </EditAccount>
+        </Modal>   
+         <Modal v-model="filedSettingModel" width="333" draggable footer-hide scrollable title="定制列">
+            <FieldSetting ref="setField" @fieldsetsuc="filedModelRes" @setcancel="setCancel" 
+                :lIssueCnt="lIssueCnt" :vcCode="selectTag" v-if="filedSettingModel" :pageId="pageId" :lTableId="1"  :columns="columns">
+            </FieldSetting>
+        </Modal>
+        <Refresh @refresh="refresh"></Refresh> 
+    </div>
+</template>
+
+
+  
+
+<script>
+import FieldSetting from './BondTendInstruc/FieldSetting'
+import BondLowDetail from './BondTendInstruc/BondLowDetail'
+import BondTag from './BondTendInstruc/BondTag'
+import BondDetail from './module/BondDetail'
+import EditAccount from './module/EditAccount'
+import Refresh from '../Refresh.vue'
+import {selectUserAuth} from '../../Api/common.js'
+const {ipcRenderer} = require('electron')
+
+
+const RenderIsLock = (h, params) => {
+        const row = params.row;
+        return h('i', {
+            'class':{
+                iconfont:true,
+                'icon-suo':row.cIsLocked == 1,
+                'icon-suo1':row.cIsLocked != 1
+            },
+            style:{
+                color:row.cIsLocked == 1 ? '#EE8400' : 'green',
+                fontSize:'16px'
+            }
+        });
+    }
+const RenderWarnLevel =  (h, params) => {
+        const row = params.row;
+        const color = row.cWarnLevel == 1 ?'#19be6b' : '#ed4014';
+        const type= row.cWarnLevel == 1 ?'ios-checkmark-circle':'ios-warning'
+        if(!row.cWarnLevel){
+             return h('span', {}, "未合规");
+        }else{
+             return h('Icon', {
+                props: {
+                    type: type,
+                    color: color,
+                    size: 18
+                }
+            });
+        }
+       
+    }
+  export default {
+    name:'page_8',
+    data () {
+        return {
+            bondInfo:null,
+            // 页面Id
+            pageId:null,
+             //分页数据
+            pageSize:30,
+            totalSize:null,
+            pageNum:1,
+            pageOpts:[30,40,50],
+            instructionListLoading:false,
+            // 字段设置弹出框
+            filedSettingModel:false,
+            tableHeight:800,
+            accountTypeList: [],
+            model1: '',
+            //债券发行信息列表
+            issueInfoList: [],
+            // 选中的债券信息Tag
+            selectTag:'',
+            vcBidTarget:'', //标位类型
+            //选中债券的轮数
+            lAddCount:0,
+            cBidPrice:null,
+            // 发行次序
+            lIssueCnt:null,
+            // 债券发行信息详情
+            issueInfo:{},
+            //指令表表格多选选中的状态
+            selectInstruc:[],
+            // 该数组中只有lCombiId 和 id
+            newSelectArr:[],
+            columns:[
+                 {
+                    type: 'selection',
+                    width: 40,
+                    align: 'left',
+                    fixed: 'left'
+                }
+            ],
+            InstructionData:[],
+            bitColumns:[
+                {
+                    title:'序号',
+                    type: 'index',
+                    width: 60,
+                    align: 'left'
+                },
+                {
+                    title: '标位',
+                    key: 'enBidPrice'
+                },
+                {
+                    title: '自动分配量',
+                    key: 'enBidAmount',
+                    width:75
+                },
+                {
+                    title: '调整量',
+                    key: 'enBidAmountModify'
+                }
+                // {
+                //     title: ' ',
+                //     width:30,
+                //      render: (h, params) => {
+                //         console.log(params)
+                //             const row = params.row;
+                //             const color = '#ed4014';
+                //             const type= 'md-close-circle'
+                //             if(this.bitRowIndex == params.index){
+                //                 return h('Icon', {
+                //                     props: {
+                //                         type: type,
+                //                         color: color,
+                //                         size: 18
+                //                     }
+                //                 });
+                //             }
+                           
+                            
+                //         }
+                // }
+            ],
+            bitRowIndex:null,
+            instrucId:null,
+           /*  bitData:[
+                {
+                    bit:'3.2%',
+                    auto:'200万',
+                    count:'200万',
+                    edit:true
+                }   
+                 
+            ], */
+            processTableHeight:300,
+            processColumns:[
+                 {
+                    title: '流程节点',
+                    key: 'actName'
+                },
+                 {
+                    title: '人员',
+                    key: 'vcDisplayname'
+                },
+                 {
+                    title: '状态',
+                    key: 'vcStartName',
+                    /* render: (h, params) => {
+                        console.log(params)
+                        const row = params.row;
+                        const color = '#ed4014';
+                        // const type= 'md-close-circle'
+                        if(row.lStart == '2'){
+                            return h('span',row.lStart, {
+                                style: {
+                                    color: '#ed4014'
+                                }
+                            });
+                        }else{
+                            return h('span',row.lStart,
+                            {
+                               style: {
+                                    color: 'green'
+                                } 
+                            });
+                        }
+                    } */
+                },
+                 {
+                    title: '时间',
+                    key: 'startTime'
+                },
+            ],
+            editAccountModel:false,
+            processData:[],
+            processTableLoading:false,
+            isCollapsed:true,
+            tagIndex:0,
+            prex:0,
+            bondDetail:{},
+            userButtonRoles:{
+                submitSecondary_8_3:false,//提交流程(提交按钮)
+                saveLinkOrder_8_6:false,//确认中标(确认中标按钮)
+                deleteInstructions_8_7:false, //删除按钮
+            },
+            // 会计分类列表
+            investTypeList:[],
+            editAcountLoading:true,
+            editRowArr:[],
+            selectRows:[],
+            saveLoading:false
+        }
+        
+    },
+    beforeRouteEnter (to, from, next) {
+        next(vm => {
+            // 在路由跳转之前获取pageId
+            // vm.pageId = to.query.pageId;
+            var SelectUserAuth =  selectUserAuth.bind(vm);
+            SelectUserAuth();
+        })
+    },
+    created(){
+        this.pageId = this.$route.meta.id;
+        this.selectIssueInfo();
+        this.selectInvestTypeList();
+        this.selectdicFundList();
+    },
+    computed: {
+            //返回table的动态高度
+            returnTableHeight () {
+               return this.tableHeight;
+            },
+            rotateIcon () {
+                return this.isCollapsed ? 'hide-side' : 'show-side';
+            }
+        },
+    methods:{
+        investTypeChange(value,editRow){
+            this.investTypeList.forEach((item) => {
+                if(item.id == value){
+                    editRow.vcInvestTypeName = item.vcName;
+                }
+            })
+        },
+        /*
+         *@functionName:  clickRow 
+         *@params1: row    elementui参数
+         *@params2: column  elementui参数
+         *@params3: event  event事件对象
+         *@description: 点击表格中的行 ctrl+click   shift+click多选表格项
+         *@author: w_gaoky
+         *@date: 2019-04-28 15:44:10
+        */ 
+        clickRow(row, column, event){
+            this.selectRows = [];
+            var clickIndex = row.index;
+            if(event.ctrlKey){
+                // ctrl+click事件，当前行选中状态取反
+                row.myHighLight = !row.myHighLight;
+            }else if(event.shiftKey){
+                // shift + click 事件 没有选中项时选中一个，有时 以当前选中的第一个为标准到点击行全部选中
+                var minIndex = null;
+                for (let i = 0; i < this.InstructionData.length; i++) {
+                    const element = this.InstructionData[i];
+                    if(element.myHighLight){
+                        minIndex = i;
+                        break;
+                    }
+                }
+                this.InstructionData.forEach((item,index) => {
+                    if(minIndex != null){
+                        if((clickIndex<=index　&& index<=minIndex) || (minIndex<=index && index<=clickIndex)){
+                            item.myHighLight = true;
+                        }else{
+                            item.myHighLight = false;
+                        }
+                    }else{
+                        row.myHighLight = true;
+                    }
+                })
+            }else{
+                // 单独点击事件，将所有选中行清空，选中当前点击行，请求流程状态
+                /* this.instrucId = row.id;
+                this.selectDealUser();
+                if(row.id){
+                    this.selectProcessHisList();
+                }else{
+                    // 选中行没有id时将标位表格清空
+                    this.bitData = [];
+                    this.processData = [];
+                } */
+                this.InstructionData.forEach((item) => {
+                    item.myHighLight = false;
+                })
+                row.myHighLight = true;
+            }
+            // 将myHighLight为true的添加到选中数组
+            this.InstructionData.forEach((item) => {
+                if(item.myHighLight){
+                    this.selectRows.push(item);
+                }
+            })
+        },
+        rowClassName ({row, rowIndex}) {
+            row.index = rowIndex;
+            if (row.myHighLight) {
+                return 'waring-row';
+            } else  {
+                return '';
+            }
+        },  
+        // 编辑表格当前行
+        editTableRow(row,index){
+             if(row.cIsLocked == 3){
+                this.$Message.warning('当前行已被锁定，无法操作！')
+            }else{
+                row.isEdit = true;
+            }
+           
+        },
+        // 保存当前行的数据到表格
+        saveInvestType(row,index){
+            var postData = [{id:row.id,vcInvestTypeId:this.editRowArr[index].vcInvestTypeId}]
+            this.$httpPost('/secondary/saveInvestType', postData).then((res) => {
+                if(res.data.actionResult == 1){
+                    this.$Message.success('修改成功！')
+                    this.InstructionData.splice(index,1,JSON.parse(JSON.stringify(this.editRowArr[index])));
+                    this.InstructionData[index].isEdit = false;
+                }else if(res.data.actionResult == 0){
+                    this.$Modal.warning({
+                        title: '警告',
+                        content: rdata.data.data
+                    });
+                }else{
+                    this.$Message.error('修改失败！');   
+                }   
+            })
+        },
+
+            
+        // 保存多条修改的表格数据
+        saveManyInvestType(){
+            var postData = [];
+            this.InstructionData.forEach((item,index) => {
+                if(item.isEdit){
+                    postData.push({id:item.id,vcInvestTypeId:this.editRowArr[index].vcInvestTypeId})
+                }
+            })
+            this.saveLoading = true;
+            this.$httpPost('/secondary/saveInvestType', postData).then((res) => {
+                if(res.data.actionResult == 1){
+                    this.$Message.success('修改成功！')
+                    this.InstructionData.forEach((instrucItem, index) => {
+                        if(instrucItem.isEdit){
+                            this.InstructionData.splice(index,1,JSON.parse(JSON.stringify(this.editRowArr[index])));
+                            this.InstructionData[index].isEdit = false;
+                        }
+                    })
+                    this.saveLoading = false;
+                }else if(res.data.actionResult == 0){
+                    this.$Modal.warning({
+                        title: '警告',
+                        content: rdata.data.data
+                    });
+                    this.saveLoading = false;
+                }else{
+                    this.$Message.error('修改失败！');
+                    this.saveLoading = false;   
+                }   
+            })
+        
+        },
+
+
+
+        saveTableRow(row,index){
+            var postData = {
+                bondInstructionInfos:[this.editRowArr[index]],
+                lIssueCnt:this.lIssueCnt,
+                lPageId:this.pageId,
+                vcCode:this.selectTag
+            }
+            // 先检查，检查成功后提交
+            this.checkInstructionBidSet(postData).then((res) => {
+                if(res.actionResult == 1){
+                    this.saveInstructionBidSet(postData).then(resData => {
+                        resData[0].isEdit = false;
+                        this.InstructionData.splice(index,1,resData[0]);
+                    });
+                }else if(res.actionResult == 2){
+                    this.$Modal.confirm({
+                        title: '警告',
+                        content: `<p>${res.data}</p>`,
+                        onOk: () => {
+                            this.saveInstructionBidSet(postData).then(resData => {
+                                resData[0].isEdit = false;
+                                this.InstructionData.splice(index,1,resData[0]);
+                            });
+                        }
+                    });
+                }else{
+                    this.$Modal.warning({
+                        title: '警告',
+                        content: `<p>${res.data}</p>`,
+                        okText: '取消'
+                    });
+                }
+            }).catch((err)=>{
+                console.log(err);
+            })
+        },
+        /* 保存多条指令编辑 */
+        saveInstruct(){
+            let saveArr = [];
+            this.InstructionData.forEach((item,index) => {
+                if(item.isEdit){
+                    saveArr.push(this.editRowArr[index]);
+                }
+            })
+            if(!saveArr.length){
+                this.$Message.warning('当前没有修改项！')
+                return;
+            }
+            var postData = {
+                bondInstructionInfos:saveArr,
+                lIssueCnt:this.lIssueCnt,
+                lPageId:this.pageId,
+                vcCode:this.selectTag
+            }
+            
+            this.saveLoading = true;
+            this.checkInstructionBidSet(postData).then((res) => {
+                if(res.actionResult == 1){
+                    this.saveInstructionBidSet(postData).then(() => {
+                        this.saveLoading = false;
+                        this.selectInstructionList();
+                    });
+                }else if(res.actionResult == 2){
+                    this.$Modal.confirm({
+                        title: '警告',
+                        content: `<p>${res.data}</p>`,
+                        onOk: () => {
+                            this.saveInstructionBidSet(postData).then(() => {
+                                this.saveLoading = false;
+                                this.selectInstructionList();
+                            });
+                        }
+                    });
+                }else{
+                    this.saveLoading = false;
+                    this.$Modal.warning({
+                        title: '警告',
+                        content: `<p>${res.data}</p>`,
+                        okText: '取消'
+                    });
+                }
+            })
+        },
+
+        // 取消编辑当前行
+        cancelTableRow(row,index){
+            row.isEdit = false;
+            /* row.myHighLight = false;
+            // 从选中行数组中剔除
+            this.selectRows.forEach((item,index) => {
+                if(item.lCombiId == row.lCombiId){
+                    this.selectRows.splice(index,1);
+                }
+            }) */
+            // 点击取消删除editArr中的对应行数据
+            this.editRowArr.splice(index,1,JSON.parse(JSON.stringify(row)));
+        },
+        isRowChange(currentRow,oldCurrentRow){
+            // 这里手动控制高亮行，在iview中修改表格数据会使得高亮行消失
+            /* this.InstructionData.forEach((item) => {
+                if(item.lCombiId == currentRow.lCombiId){
+                    item._highlight = true;
+                }
+                if(oldCurrentRow && item.lCombiId == oldCurrentRow.lCombiId){
+                    item._highlight = false;
+                }
+            }) */
+            // this.currentRow = currentRow;
+            console.log(currentRow)
+            if(currentRow){
+                this.instrucId = currentRow.lChangeId;
+                // this.selectDealUser();
+                if(currentRow.id){
+                    this.selectProcessHisList();
+                }else{
+                    // 选中行没有id时将标位表格清空
+                    this.bitData = [];
+                    this.processData = [];
+                }
+            }
+            
+        },
+         // 组件数据刷新
+        refresh(){
+            selectUserAuth.bind(this)();
+            this.selectIssueInfo();
+            this.selectdicFundList();
+        },
+        //查询账户大类
+        selectdicFundList(){
+            this.$httpGet(`/bondBid/selecDicFundType`)
+                .then((res) => {            
+                    if(res.status===200 && res.data){ 
+                        this.accountTypeList = [];                      
+                        for(let i=0;i<res.data.length;i++){
+                            let obj={};
+                            obj.label=res.data[i];
+                            obj.value=res.data[i];
+                            this.accountTypeList.push(obj);
+                        }
+                        
+                    }                
+                })
+        },
+
+         //查询会计分类字典表
+        selectInvestTypeList(){
+            this.$httpGet(`/secondary/selectInvestType`)
+                .then((res) => {            
+                    if(res.status===200 && res.data){ 
+                        this.investTypeList =res.data;                      
+                    }                
+                })
+        },
+
+        // 点击切换选中的债券
+        tagClick(item){
+            // console.log(item)
+            this.selectTag = item.id;
+            this.lIssueCnt = item.lIssueCnt;
+            this.lAddCount = item.lAddCount;
+            this.vcBidTarget = item.vcBidTarget;
+            this.selectBondInfo();
+            this.selectInstructionList();
+
+        },
+
+        // filedModelRes 字段设置成功后
+        filedModelRes(){
+            console.log("filedModelRes");
+            this.initTable();
+            this.selectInstructionList();
+        },
+
+        setCancel(){
+            this.filedSettingModel = false;
+        },
+
+        // initTable 请求动态表头
+        initTable(){
+            var postData = {
+                lPageId:this.pageId,
+                lTableId:1,
+                lIssueCnt:this.lIssueCnt,
+                vcCode:this.selectTag
+            }
+            this.$httpPost('/link/selectLinkInfo',postData).then((res) => {
+                res.data.forEach((tableHeader) => {
+                    if(tableHeader.key == "cIsLocked"){
+                        tableHeader.render = RenderIsLock;
+                    }else if(tableHeader.key == "cWarnLevel"){
+                        tableHeader.render = RenderWarnLevel;
+                    }
+                })
+                this.columns.length = 1;
+                this.columns = this.columns.concat(res.data)
+            })
+        },
+        
+        // 点击字段修改弹框确定
+        fieldsSave(){
+            this.$refs.setField.saveLinkOrder();
+        },
+
+         // filedModelRes 字段设置成功后
+        filedModelRes(){
+            console.log("filedModelRes");
+            this.filedSettingModel = false;
+            this.initTable();
+            this.selectInstructionList();
+        },
+
+        // 右侧内容展开折叠
+        collapsedSider () {
+            console.log(this.isCollapsed)
+            this.$refs.sider.toggleCollapse();
+        },
+
+        // 查询债券发行信息列表
+        selectIssueInfo(){
+            this.$httpGet('/secondary/selectSecondaryBonds').then((res) => {
+                this.issueInfoList = [];
+                this.$nextTick(() => {
+                    this.issueInfoList = res.data;
+                    if(this.issueInfoList.length > 0){
+                        this.selectTag =  this.issueInfoList[0].id;
+                        this.lIssueCnt = this.issueInfoList[0].lIssueCnt;
+                        this.vcBidTarget = this.issueInfoList[0].vcBidTarget;
+                        // 获取到当前选中的债券vcCode后请求债券信息，和指令列表
+                        this.selectBondInfo();
+                        this.initTable();
+                        this.selectInstructionList();
+                        this.selectBondDetailedInfo();
+                    }else{
+                        this.columns = [
+                            {
+                                type: 'selection',
+                                width: 40,
+                                align: 'left',
+                                fixed: 'left'
+                            }
+                        ];
+                        this.lAddCount = 0;
+                        this.cBidPrice = null;
+                        this.issueInfo = {};
+                        this.InstructionData = [];
+                        this.processData = [];
+                    }
+                })
+            })
+        },
+
+        // 查询债券发行信息数据
+        selectBondInfo(){
+            this.$httpGet(`/inst/selectBondInfo?vcCode=${this.selectTag}&lIssueCnt=${this.lIssueCnt}`).then((res) => {
+                this.lAddCount = this.issueInfo.lAddCount;
+                this.cBidPrice = this.issueInfo.cBidPrice;
+                this.issueInfo = res.data;
+            })
+        },
+        
+        // 查询指令信息列表
+        selectInstructionList(){
+            this.instructionListLoading = true;
+            this.$httpGet(`/secondary/selectSecondarys?vcFundType1=${this.model1}&vcCode=${this.selectTag}&lIssueCnt=${this.lIssueCnt}&pageNum=${this.pageNum}&pageSize=${this.pageSize}&lPageId=${this.pageId}`).then((res) => {
+                this.InstructionData = res.data.list;
+                this.editRowArr = [];
+                // 修改的数组clone对象
+                this.editRowArr = JSON.parse(JSON.stringify(this.InstructionData));
+                this.processData = [];
+                this.totalSize = res.data.total;
+                this.instructionListLoading = false;
+                
+            })
+        },
+
+        //页码改变时的回调
+        pageNumChange (page){
+            this.pageNum = page;
+            this.selectInstructionList();
+        },
+
+        //每页数据条数改变时的回调
+        pageSizeChange (pageSize){
+            this.pageSize = pageSize;
+            this.selectInstructionList();
+        },
+
+        //查询右侧债券发行信息详情组件数据
+        selectBondDetailedInfo(){
+            this.$httpGet(`/bondIssue/selectBondDetailedInfo?vcCode=${this.selectTag}&lIssueCnt=${this.lIssueCnt}`)
+                .then((res) => {            
+                    if(res.status===200 && res.data){
+                        this.bondDetail=res.data;
+                    }                
+                })
+        },
+        // 指令表表格多选框改变
+        selectChange(selection){
+            this.selectInstruc = selection;
+        },
+        //显示流程详细流程图
+        showProcessDetail(){
+            ipcRenderer.send('showProcessDetail',this.instrucId)
+        },
+
+        // 请求标位数据
+        /* selectBits(){
+            this.$httpGet(`/inst/selectBits?id=${this.instrucId}`).then((res) => {
+                this.bitData = res.data
+            })
+        }, */
+        // 请求历史流程数据
+        selectProcessHisList(){
+            if(this.instrucId){
+                    this.processTableLoading = true;
+                    this.$httpGet(`/process/selectProcessHisList?id=${this.instrucId}&processDefinitionKey=Process_Decision_Bond_Change`).then((res) => {
+                    this.processData = res.data
+                    this.processTableLoading = false;
+                })
+            }else{
+                this.processData = [];
+            }
+            
+        },
+
+        // 指令表的高亮行改变时触发
+        /* insRowChange(currentRow,oldCurrentRow){
+            this.instrucId = currentRow.lChangeId;
+            this.selectProcessHisList();
+            
+        }, */
+        //提交指令
+        submitHandle(){
+            if(this.selectRows.length > 0){
+                var submitList = [];
+                for (var index = 0; index < this.selectRows.length; index++) {
+                    var element = this.selectRows[index];
+                    console.log(element)
+                    if(element.id == null){
+                        this.$Message.warning("提交失败，选中项中存在未生效的指令！");
+                        return false;
+                    }else if(element.isEdit){
+                        this.$Message.warning('当前指令处于修改编辑状态，请先保存！');
+                        return;
+                    }else if(element.vcTaskName !== '未更改' && element.vcTaskName !=='账户已更改'){
+                        this.$Message.warning("存在指令已进入修改账户流程！");
+                        return false;
+                    }else{
+                        submitList.push({instId:element.id,taskId:element.vcTaskId});
+                    }
+                }
+                this.$httpPost('/secondary/submitSecondary',submitList).then((res) => {
+                    if(res.data.actionResult != 0){
+                        this.$Message.success('指令提交成功！')
+                        this.refresh();
+                        // this.selectInstructionList();
+                    }else{
+                        this.$Message.error('提交失败！')
+                    }
+                    
+                })
+            }else{
+                this.$Message.warning('请选择要提交的指令！')
+            }
+        },
+        /* 修改账户 */
+        editAcountHandle(){
+            if(this.selectRows.length == 0){
+                this.$Message.warning('请选择单条指令！');
+            }else if(this.selectRows.length > 1){
+                this.$Message.warning('只能选择单条指令！');
+            }else if(this.selectRows[0].isEdit){
+                this.$Message.warning('当前指令处于修改编辑状态，请先保存！');
+            }else if(this.selectRows[0].vcTaskName !== '未更改' && this.selectRows[0].vcTaskName !=='账户已更改'){
+                this.$Message.warning('当前指令已发起修改账户流程！');
+            }else{
+                this.$httpGet('/bondChange/selectBondChange',{lStockId:this.selectRows[0].id}).then((res) => {
+                    this.bondInfo = res.data;
+                    this.editAccountModel = true;
+                })
+            }
+        },
+        editAccountOk(){
+            this.$refs.editAccount.submitEditForm();
+        },
+        // 提交成功取消loading 关闭modal
+        submitSucess(data){
+            this.editAcountLoading = false;
+            this.selectRows[0].lChangeId = data.id;
+            this.selectRows[0].vcTaskName = data.vcName;
+            this.InstructionData.forEach((item) => {
+                if(item.lCombiId == this.selectRows[0].lCombiId){
+                    item.lChangeId = data.id;
+                    item.vcTaskName = data.vcName;
+                    item._checked = true;
+                   
+                }
+            })
+            this.$nextTick(() => {
+                this.editAcountLoading = true;
+            })
+            this.editAccountModel = false;
+        },
+        submitError(){
+            this.editAcountLoading = false;
+            this.$nextTick(() => {
+                this.editAcountLoading = true;
+            })
+            // this.editAccountModel = false;
+        },
+        // 删除指令
+        deleteHandle(){
+             if(this.selectRows.length > 0){
+                this.$Modal.confirm({
+                    title: '提示',
+                    content: '<p>是否删除选中的指令？</p>',
+                    // loading: true,
+                    onOk: () => {
+                        var deleteList = [];
+                        for (var index = 0; index < this.selectRows.length; index++) {
+                            var element = this.selectRows[index];
+                            if(element.id == null){
+                                this.$Message.warning("删除失败，选中项中存在未生效的指令！");
+                                return false;
+                            }else if(element.isEdit){
+                                this.$Message.warning('选中指令中存在指令处于编辑状态，请先保存！');
+                                return;
+                            }else{
+                                deleteList.push(element.id);
+                            }
+                        }
+                        this.$httpPost('/secondary/deleteInstructions',deleteList).then((res) => {
+                            this.$Modal.remove();
+                            this.$Message.success('删除成功');
+                            this.selectInstructionList();
+                        })
+                    },
+                    onCancel: () => {
+                        console.log("取消删除操作")
+                    }
+                });
+                
+            }else{
+                this.$Message.warning('请选择要删除的指令！')
+            }
+        },
+    },
+     mounted(){
+         this.$nextTick(() => {
+               this.tableHeight=this.$refs.tableWrap.getBoundingClientRect().height;
+                this.processTableHeight=this.$refs.processTableWrap.getBoundingClientRect().height;
+            })
+        window.addEventListener('resize', () => {//动态调整高度
+            this.tableHeight=this.$refs.tableWrap.getBoundingClientRect().height;
+            this.processTableHeight=this.$refs.processTableWrap.getBoundingClientRect().height;
+        })
+        
+    },
+    components:{
+        FieldSetting,
+        BondLowDetail,
+        BondTag,
+        BondDetail,
+        Refresh,
+        EditAccount
+    }
+   
+  }
+</script>
+
+<style scoped>
+   
+
+   #bond-tend{
+        width: 100%;
+        height: 100%;
+   }
+  .tag-wrapper{
+        height: 30px;
+        overflow:hidden;
+    }
+  
+   .tagChildren{
+        width: 20px;
+        height: 30px;
+        float:left;
+        line-height:30px;
+        text-align: center;
+        background:#666;
+   }
+   .table-wrapper{
+        height: calc(100% - 152px);
+   }   
+   .sider{
+       padding-left:8px;
+       position: relative;
+   }  
+   .process-table-wrapper{
+        height: calc(100vh - 140px);
+   } 
+
+   /*.sider .ivu-layout-sider-children{*/
+    /*//    background-color:  rgba(66,66,66,0);*/
+   /*}*/
+    /*.show-hide-side-bt{
+        cursor:pointer;
+        display: inline-block;
+        width: 8px;
+        height: 80px;
+        border-radius: 0 4px 4px 0;
+        background: #666;
+        position: absolute;
+        right: 0;
+        top: calc(50% - 50px);
+        text-align: center;
+        line-height: 75px;
+        
+    }*/
+   .instruc-table{
+        user-select:none;
+    }
+    
+    
+</style>

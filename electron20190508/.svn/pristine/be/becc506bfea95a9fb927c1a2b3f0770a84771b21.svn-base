@@ -1,0 +1,1023 @@
+<template>
+  <div ref="warnWrapper" id="warn-wrapper">
+    <Row :gutter="10">
+      <Col span="12" class="overflow-x">
+      <div class="title-div">
+        <div class="sec-header minWidth350 ">
+          <h3>我司买入成交对应涨幅表</h3>
+          <div class="speech-button">
+            <label class="label-class">语音播报开关：</label>
+            <i-switch v-model="Speech" @on-change="spechChange">
+              <span slot="open">开</span>
+              <span slot="close">关</span>
+            </i-switch>
+          </div>
+        </div>
+
+        <!-- <div class="speech-button">
+                        <label class="label-class">语音播报开关：</label>
+                        <i-switch v-model="Speech" @on-change="spechChange">
+                            <span slot="open">开</span>
+                            <span slot="close">关</span>
+                        </i-switch> 
+                    </div> -->
+
+      </div>
+      <Table :highlight-row="true" size="small" class="warn-table" :height="returnTableHeight" stripe :columns="riseColumns" :data="riseData"></Table>
+      </Col>
+      <Col span="12" class="overflow-x">
+      <div class="title-div">
+        <div class="sec-header minWidth660">
+          <h3>我司卖出成交对应跌幅表</h3>
+          <label class="user-role-label">当前角色：</label>
+          <Select v-model="userRoles" size="small" class="user-role-select" @on-change="userRoleChange" style="width:150px">
+            <Option v-for="item in userRolesList" :value="item.value" :key="item.value">{{item.label}}</Option>
+          </Select>
+          <Button class="show-setting-button" @click="modal7 = true" size="small" type="primary">预警设置</Button>
+          <Button class="show-record-button" @click="modal8 = true" size="small" type="primary">显示涨跌记录表</Button>
+        </div>
+
+        <!--<a href="http://www.baidu.com">Preface</a>-->
+
+      </div>
+      <Modal width="500" title="预警设置" v-model="modal7" :mask-closable="true" footer-hide ref="settingModal" @on-visible-change="setModelChange">
+        <Form ref="settingFormCustom" :model="settingFormCustom" class="setting-form" :rules="ruleCustom" :label-width="180" label-position="right">
+          <!--<FormItem label="监控时间区域：" prop="lTimeInterval">
+                                <Input type="text" number size="small" v-model="settingFormCustom.lTimeInterval" placeholder="请输入分钟数">
+                                    <span slot="append">分钟</span>
+                                </Input>
+                            </FormItem>-->
+          <FormItem label="重复报读间隔：" prop="lReadInterval">
+            <Input type="text" number size="small" v-model="settingFormCustom.lReadInterval" placeholder="请输入间隔秒数">
+            <span slot="append">秒</span>
+            </Input>
+          </FormItem>
+          <FormItem label="成分股上涨预警比例：" prop="enConstUpRatio">
+            <Input type="text" number width="200" size="small" v-model="settingFormCustom.enConstUpRatio" placeholder="请输入成分股上涨预警百分比">
+            <span slot="append">%</span>
+            </Input>
+          </FormItem>
+          <FormItem label="成分股下跌预警比例：" prop="enConstDownRatio">
+            <Input type="text" number size="small" v-model="settingFormCustom.enConstDownRatio" placeholder="请输入成分股下跌预警百分比">
+            <span slot="append">%</span>
+            </Input>
+          </FormItem>
+          <FormItem label="非成分股上涨预警比例：" prop="enUnconstUpRatio">
+            <Input size="small" number v-model="settingFormCustom.enUnconstUpRatio" placeholder="请输入非成分股上涨预警百分比">
+            <span slot="append">%</span>
+            </Input>
+          </FormItem>
+          <FormItem label="非成分股下跌预警比例：" prop="enUnconstDownRatio">
+            <Input type="text" number size="small" v-model="settingFormCustom.enUnconstDownRatio" placeholder="请输入非成分股下跌预警百分比">
+            <span slot="append">%</span>
+            </Input>
+          </FormItem>
+
+          <FormItem class="btn-form-item">
+            <Button size="small" @click="modal7 = false" style="margin-left: 8px">取消</Button>
+            <Button type="primary" size="small" @click="handleSubmit('settingFormCustom')">提交</Button>
+          </FormItem>
+        </Form>
+      </Modal>
+      <Modal width="1000" title="股票涨跌记录表" v-model="modal8" :mask-closable="true" footer-hide @on-visible-change="modelChange">
+        <Table :highlight-row="true" size="small" class="warn-table" height="640" stripe :columns="recordColumns" :data="recordData"></Table>
+        <Page :total="totalSize" :current="pageNum" @on-page-size-change="pageSizeChange" @on-change="pageNumChange" :page-size="pageSize" :page-size-opts="pageOpts" show-total show-elevator show-sizer></Page>
+      </Modal>
+
+      <Table :highlight-row="true" size="small" class="warn-table" :height="returnTableHeight" stripe :columns="fallColumns" :data="fallData"></Table>
+
+      </Col>
+    </Row>
+  </div>
+</template>
+
+<script>
+import { warnBaseURL } from '../ajax/config.js'
+import SystemInformation from './LandingPage/SystemInformation'
+// 引入自定义表单验证
+import {validateNum} from '../util/valide.js'
+import moment from 'moment'
+const log4js = require('../util/log4js.js')
+const reqlogger = log4js.getLogger();
+const reqloggerErr = log4js.getLogger('err');
+export default {
+  name: 'landing-page',
+  components: { SystemInformation },
+  data () {
+    return {
+      userId: null,
+      // 用户角色下拉
+      userRoles: null,
+      userRolesList: [],
+      //定时器对象
+      timer: null,
+      //预警设置表单
+      settingFormCustom: {
+        lReadInterval: '',
+        lTimeInterval: '',
+        enConstUpRatio: '',
+        enConstDownRatio: '',
+        enUnconstUpRatio: '',
+        enUnconstDownRatio: ''
+      },
+      //预警轮训时间
+      settingTime: 10,
+      //表单的验证规则
+      ruleCustom: {
+        lReadInterval: [
+          { validator: validateNum, trigger: 'blur' }
+        ],
+        lTimeInterval: [
+          { validator: validateNum, trigger: 'blur' }
+        ],
+        enConstUpRatio: [
+          { validator: validateNum, trigger: 'blur' }
+        ],
+        enConstDownRatio: [
+          { validator: validateNum, trigger: 'blur' }
+        ],
+        enUnconstUpRatio: [
+          { validator: validateNum, trigger: 'blur' }
+        ],
+        enUnconstDownRatio: [
+          { validator: validateNum, trigger: 'blur' }
+        ]
+      },
+      //分页相关状态
+      pageSize: 25,
+      totalSize: null,
+      pageNum: 1,
+      pageOpts: [25, 35, 45],
+      //记录表显示的flag                
+      modelShow: false,
+      //websocket对象
+      websock: null,
+      //两个弹出框
+      modal7: false,
+      modal8: false,
+      //涨幅表对每列字段定义
+      riseColumns: [
+        {
+          title: '市场',
+          key: 'vcMarketName',
+          minWidth: 60,
+          ellipsis: true
+        },
+        {
+          title: '证券代码',
+          key: 'vcReportCode',
+          minWidth: 60,
+          ellipsis: true
+        },
+        {
+          title: '证券名称',
+          key: 'vcStockName',
+          minWidth: 60,
+          ellipsis: true
+        },
+        {
+          title: '指数',
+          key: 'vcIaname',
+          minWidth: 60,
+          ellipsis: true
+        },
+        {
+          title: '触警时间',
+          key: 'tsAlertorTime',
+          minWidth: 75,
+          ellipsis: true
+        },
+        {
+          title: '涨幅(%)',
+          key: 'enUpOrDowns',
+          align: "right",
+          minWidth: 90,
+          ellipsis: true
+        },
+        {
+          title: '我司成交占比(%)',
+          key: 'enCompRatio',
+          align: "right",
+          minWidth: 120,
+          ellipsis: true
+
+        },
+        {
+          title: '我司成交量',
+          key: 'lDealAmount',
+          align: "right",
+          minWidth: 100,
+          ellipsis: true,
+          render: (h, params) => {
+            let self = this;
+            return h('span', self.formatNum(params.row.lDealAmount))
+          }
+        },
+        {
+          title: '市场成交量',
+          key: 'lMarketDealAmount',
+          align: "right",
+          minWidth: 100,
+          ellipsis: true,
+          render: (h, params) => {
+            let self = this;
+            return h('span', self.formatNum(params.row.lMarketDealAmount))
+          }
+
+        },
+        {
+          title: '交易员',
+          key: 'vcOperatorName',
+          minWidth: 80,
+          ellipsis: true
+        },
+         {
+          title: '我司成交金额',
+          key: 'lTurnoveraMount',
+          align: "right",
+          minWidth: 92,
+          ellipsis: true
+        },
+        {
+          title: '我司成交股数',
+          key: 'lNumberTransactions',
+          // align: "right",
+          minWidth: 92,
+          ellipsis: true
+        }
+      ],
+      //跌幅表对每列字段定义
+      fallColumns: [
+        {
+          title: '市场',
+          key: 'vcMarketName',
+          minWidth: 60,
+          ellipsis: true
+        },
+        {
+          title: '证券代码',
+          key: 'vcReportCode',
+          minWidth: 60,
+          ellipsis: true
+        },
+        {
+          title: '证券名称',
+          key: 'vcStockName',
+          minWidth: 60,
+          ellipsis: true
+        },
+        {
+          title: '指数',
+          key: 'vcIaname',
+          minWidth: 60,
+          ellipsis: true
+        },
+        {
+          title: '触警时间',
+          key: 'tsAlertorTime',
+          minWidth: 75,
+          ellipsis: true
+        },
+        {
+          title: '跌幅(%)',
+          key: 'enUpOrDowns',
+          align: "right",
+          minWidth: 90,
+          ellipsis: true
+        },
+        {
+          title: '我司成交占比(%)',
+          key: 'enCompRatio',
+          align: "right",
+          minWidth: 120,
+          ellipsis: true
+        },
+        {
+          title: '我司成交量',
+          key: 'lDealAmount',
+          align: "right",
+          minWidth: 100,
+          render: (h, params) => {
+            let self = this;
+            return h('span', self.formatNum(params.row.lDealAmount))
+          },
+          ellipsis: true
+        },
+        {
+          title: '市场成交量',
+          key: 'lMarketDealAmount',
+          align: "right",
+          minWidth: 100,
+          render: (h, params) => {
+            let self = this;
+            return h('span', self.formatNum(params.row.lMarketDealAmount))
+          },
+          ellipsis: true
+        },
+        {
+          title: '交易员',
+          key: 'vcOperatorName',
+          minWidth: 80,
+          ellipsis: true
+        },
+        {
+          title: '我司成交金额',
+          key: 'lTurnoveraMount',
+          align: "right",
+          minWidth: 92,
+          ellipsis: true
+        },
+        {
+          title: '我司成交股数',
+          key: 'lNumberTransactions',
+          // align: "right",
+          minWidth: 92,
+          ellipsis: true
+        }
+      ],
+      //记录表对每列字段定义
+      recordColumns: [
+        {
+          title: '市场',
+          key: 'vcMarketName',
+          minWidth: 60
+        },
+        {
+          title: '证券代码',
+          key: 'vcReportCode',
+          minWidth: 60
+        },
+        {
+          title: '证券名称',
+          key: 'vcStockName',
+          minWidth: 60
+        },
+        {
+          title: '交易方向',
+          key: 'cEntrustDirection',
+          minWidth: 60,
+          render: function (h, params) {
+            if (params.row.cEntrustDirection == 1) {
+              return h('span', '股票买入');
+            } else {
+              return h('span', '股票卖出');
+            }
+          }
+
+        },
+        {
+          title: '指数',
+          key: 'vcIaname',
+          minWidth: 60
+        },
+        {
+          title: '预警阈值(%)',
+          key: 'enThreshold',
+          minWidth: 80
+        },
+
+        {
+          title: '触警时间',
+          key: 'tsAlertorTime',
+          minWidth: 75
+        },
+        {
+          title: '涨跌幅(%)',
+          key: 'enUpOrDowns',
+          align: "right",
+          minWidth: 90
+
+        },
+        {
+          title: '我司成交占比(%)',
+          key: 'enCompRatio',
+          align: "right",
+          minWidth: 110
+
+        },
+        {
+          title: '我司成交量',
+          key: 'lDealAmount',
+          align: "right",
+          minWidth: 100,
+          render: (h, params) => {
+            let self = this;
+            return h('span', self.formatNum(params.row.lDealAmount))
+          },
+          ellipsis: true
+
+        },
+        {
+          title: '市场成交量',
+          key: 'lMarketDealAmount',
+          align: "right",
+          minWidth: 100,
+          render: (h, params) => {
+            let self = this;
+            return h('span', self.formatNum(params.row.lMarketDealAmount))
+          },
+          ellipsis: true
+
+        },
+        {
+          title: '交易员',
+          key: 'vcOperatorName',
+          minWidth: 80,
+          ellipsis: true
+        },
+         {
+          title: '我司成交金额',
+          key: 'lTurnoveraMount',
+          align: "right",
+          minWidth: 92,
+          ellipsis: true
+        },
+        {
+          title: '我司成交股数',
+          key: 'lNumberTransactions',
+          // align: "right",
+          minWidth: 92,
+          ellipsis: true
+        }
+      ],
+      riseData: [],
+      fallData: [],
+      recordData: [],
+      tableHeight: 500,
+      //语音播报数字转中文用到
+      numbers: new Array('零', '一', '二', '三', '四', '五', '六', '七', '八', '九'),
+      //是否进行播报flag
+      Speech: true,
+      //请求时间
+      time: null
+    }
+  },
+  computed: {
+    //返回table的动态高度
+    returnTableHeight () {
+      return this.tableHeight;
+    }
+  },
+  methods: {
+    //提交预警设置信息
+    handleSubmit (name) {
+      // validate 验证表单方法，循环全部input的value值，全部符合返回valid为true，否则false
+      this.$refs[name].validate((valid) => {
+        if (valid) {
+          this.$httpPost('/saveTWarningSet', this.settingFormCustom, warnBaseURL).then((res) => {
+            if (res.data.data == "保存成功") {
+              this.$Message.success('保存设置成功！');
+              this.modal7 = false;
+            } else {
+              this.$Message.error('保存设置失败！');
+            }
+          })
+        }
+      })
+    },
+    //预警设置弹出框显示隐藏状态改变时调用
+    setModelChange (val) {
+      //显示时请求数据，隐藏时重置表单
+      if (val) {
+        this.selectWarnSetting();
+      } else {
+        this.handleReset("settingFormCustom");
+      }
+    },
+    // 请求预警设置数据
+    selectWarnSetting () {
+      this.$httpGet('/selectTWarningSet', null, warnBaseURL).then((res) => {
+        // this.time = res.data.lFrequency;
+        this.settingFormCustom = res.data;
+        this.settingTime = res.data.lTimeInterval;
+
+      })
+    },
+
+    //重置表单方法
+    handleReset (name) {
+      this.$refs[name].resetFields();
+    },
+
+    //创建webSocket连接
+    initWebSocket () {
+      this.websock = new WebSocket(`${this.$store.state.wsUrl}stockWarningWebSocket?userId=${this.userId}&roleId=${this.userRoles}`)
+    },
+    sendMessage (currentPage) {
+      this.websock.send("messageString")
+      console.log("messageString")
+    },
+    //webSocket主动发送消息
+    threadPoxi (currentPage) {
+      //若是ws开启状态
+      if (this.websock.readyState === this.websock.OPEN) {
+        this.sendMessage(currentPage)
+      }
+      // 若是 正在开启状态，则等待500毫秒
+      else if (this.websock.readyState === this.websock.CONNECTING) {
+        let that = this;//保存当前对象this
+        setTimeout(function () {
+          that.sendMessage(currentPage)
+        }, 500);
+      }
+      // 若未开启 ，则等待800毫秒
+      else {
+        this.initWebSocket();
+        let that = this;//保存当前对象this
+        setTimeout(function () {
+          that.sendMessage(currentPage)
+        }, 800);
+      }
+    },
+
+    // 播报字体颜色渲染
+    renderBackColor (item) {
+      return item.cellClassName = { enUpOrDowns: 'back-color', enUpOrDowns: 'back-color' };
+    },
+    //渲染我司成交占比TableCell  (没有超出涨幅跌幅预警时调用)
+    renderEnCompRatioBack (item) {
+      if (20 <= item.enCompRatio && item.enCompRatio < 40) {
+        item.cellClassName = { enCompRatio: 'enCompRatio-cell1' };
+      } else if (40 <= item.enCompRatio && item.enCompRatio < 60) {
+        item.cellClassName = { enCompRatio: 'enCompRatio-cell2' };
+      } else if (60 <= item.enCompRatio && item.enCompRatio < 80) {
+        item.cellClassName = { enCompRatio: 'enCompRatio-cell3' };
+      } else if (80 <= item.enCompRatio && item.enCompRatio <= 100) {
+        item.cellClassName = { enCompRatio: 'enCompRatio-cell4' };
+      } else {
+        item.cellClassName = { enCompRatio: 'enCompRatio-cell' };
+      }
+      return item;
+    },
+    //渲染enUpOrDowns涨幅TableCell (涨幅超出预警时调用，渲染单元格为red) 
+    renderUpsBack (item) {
+      if (20 <= item.enCompRatio && item.enCompRatio < 40) {
+        item.cellClassName = { enUpOrDowns: 'red-cell', enCompRatio: 'enCompRatio-cell1' };
+      } else if (40 <= item.enCompRatio && item.enCompRatio < 60) {
+        item.cellClassName = { enUpOrDowns: 'red-cell', enCompRatio: 'enCompRatio-cell2' };
+      } else if (60 <= item.enCompRatio && item.enCompRatio < 80) {
+        item.cellClassName = { enUpOrDowns: 'red-cell', enCompRatio: 'enCompRatio-cell3' };
+      } else if (80 <= item.enCompRatio && item.enCompRatio <= 100) {
+        item.cellClassName = { enUpOrDowns: 'red-cell', enCompRatio: 'enCompRatio-cell4' };
+      } else {
+        item.cellClassName = { enUpOrDowns: 'red-cell' };
+      }
+      return item;
+    },
+    //渲染enUpOrDowns跌幅TableCell (跌幅超出预警时调用，渲染单元格为green) 
+    renderDownsBack (item) {
+      if (20 <= item.enCompRatio && item.enCompRatio < 40) {
+        item.cellClassName = { enUpOrDowns: 'green-cell', enCompRatio: 'enCompRatio-cell1' };
+      } else if (40 <= item.enCompRatio && item.enCompRatio < 60) {
+        item.cellClassName = { enUpOrDowns: 'green-cell', enCompRatio: 'enCompRatio-cell2' };
+      } else if (60 <= item.enCompRatio && item.enCompRatio < 80) {
+        item.cellClassName = { enUpOrDowns: 'green-cell', enCompRatio: 'enCompRatio-cell3' };
+      } else if (80 <= item.enCompRatio && item.enCompRatio <= 100) {
+        item.cellClassName = { enUpOrDowns: 'green-cell', enCompRatio: 'enCompRatio-cell4' };
+      } else {
+        item.cellClassName = { enUpOrDowns: 'green-cell' };
+      }
+      return item;
+    },
+
+    //请求记录表数据
+    reqRecordData () {
+      this.$httpGet(`/selectHistory?pageNum=${this.pageNum}&pageSize=${this.pageSize}&roleId=${this.userRoles}`, null, warnBaseURL).then((res) => {
+        this.totalSize = res.data.total;
+        this.recordData = res.data.list.map((item) => {
+          if (item.lLimitType == 1) {
+            return this.renderUpsBack(item);
+          } else {
+            return this.renderDownsBack(item);
+          }
+        })
+      })
+    },
+    //记录表显示/隐藏回调
+    modelChange (val) {
+      this.modelShow = val
+      if (val) {
+        this.reqRecordData();
+      }
+    },
+    //页码改变时的回调
+    pageNumChange (page) {
+      this.pageNum = page;
+      this.reqRecordData();
+    },
+    //每页数据条数改变时的回调
+    pageSizeChange (pageSize) {
+      this.pageSize = pageSize;
+      this.reqRecordData();
+    },
+    //侧边栏展开折叠
+    collapsedSider () {
+      this.$refs.side1.toggleCollapse();
+    },
+    //视口变化表格高度变化
+    resizeHandle () {
+      this.$nextTick(() => {
+        this.tableHeight = this.$refs.warnWrapper.offsetHeight - 40;
+      })
+    },
+    //格式化数量格式
+    formatNum: function (value) {
+      if (!value) return '0'
+      var intPart = Number(value).toFixed(0); //获取整数部分
+      var intPartFormat = intPart.toString().replace(/(\d)(?=(?:\d{3})+$)/g, '$1,'); //将整数部分逢三一断
+      return intPartFormat
+    },
+    //调用浏览器语音模块 播报预警信息
+    speak: function (stockCode, stockName, msg, value) {
+      var result = '';
+      var sp = stockCode.split('');
+      for (var tmp in sp) {
+        result += this.numbers[sp[tmp]]
+      }
+      var msg = new SpeechSynthesisUtterance(result + stockName + msg + value);
+      window.speechSynthesis.speak(msg);
+    },
+    // 语音播报开关
+    spechChange (val) {
+      console.log(val)
+    },
+
+    // 初始换下拉选择用户角色
+    initRolesSelect () {
+      this.$httpGet('/selectUserRoles', { pId: 5 }, warnBaseURL).then((res) => {
+        if (res.data.length > 0) {
+          this.userRolesList.length = 0;
+          res.data.forEach((item) => {
+            this.userRolesList.push({ value: item.id, label: item.vcName })
+          })
+          this.userRoles = this.userRolesList[0].value;
+          //请求数据
+          this.ajaxRecords();
+        }
+      }).catch((err) => {
+        // console.log(reqloggerErr)
+        reqlogger.info("请求预警设置失败！导致无法发起具体数据请求");
+      })
+      /*this.userRolesList.length = 0;
+      if(this.$store.getters.userInfo.oaRoles.length > 0){
+          this.$store.getters.userInfo.oaRoles.forEach((item) => {
+              this.userRolesList.push({value:item.id, label:item.vcName})
+          });
+      }*/
+    },
+    // 切换角色
+    userRoleChange (value) {
+      // console.log("userRoleChange")
+      this.ajaxRecords();
+
+      // console.log(this.websock)
+      // if(!!this.websock){
+      // this.websock.close();
+      //主动送消息需要断掉webSocket
+      // this.websock.send("10086");
+      // this.websock.close();
+      // this.webSocket = null;
+      // this.initWebSocket();
+      // }
+
+    },
+
+    //定时请求数据
+    ajaxRecords () {
+      let _this = this;
+      // var messageObj = {};
+      var resObject = {};
+      var riseDataList = [];
+      var fallDataList = [];
+      var recordAddList = [];
+      this.$httpGet('/getWarningData', { userId: _this.userId, roleId: _this.userRoles }, warnBaseURL).then(e => {
+        //是否第一条播报数据的flag
+        // if(this.Speech){
+
+        // }
+        var Speech = _this.Speech ? true : false;
+        //清空向记录表中添加数据的数组
+        recordAddList.length = 0;
+        var resData = e.data;
+        // console.log(resData)
+        resObject = JSON.parse(resData.data);
+        //返回状态码为0，不在交易时间提示
+
+        if (resData.actionResult == 0 || resData.data == "null") {
+          // 存储日志
+          reqlogger.info("返回状态：当前不在交易时间！");
+          // _this.websock.close();
+          _this.$Modal.warning({
+            title: "提示",
+            content: "不在交易时间内！"
+          });
+          _this.time = resObject.lFrequency;
+          clearInterval(this.timer);
+          _this.initTimer();
+          _this.riseData = riseDataList;
+          _this.fallData = fallDataList;
+        } else {
+          //修改推送时间
+          if (resObject.lFrequency != _this.time) {
+            _this.time = resObject.lFrequency;
+            reqlogger.info("返回状态：请求数据成功，修改了轮训时间！轮训时间为：" + _this.time);
+            clearInterval(_this.timer);
+            _this.initTimer();
+          }
+          //映射出新数组
+          if (resObject.upStockRecords) {
+            riseDataList = resObject.upStockRecords.map((item) => {
+              //触警并且是非连续触警
+              if (item.lIsAlertor == 1) {
+                //进行语音播报
+                if (Speech && item.cIsRead == 0) {
+                  // _this.renderBackColor(item);
+                  item._highlight = true;
+                  _this.speak(item.vcReportCode + '', item.vcStockName, "涨幅为百分之", item.enUpOrDowns);
+                  Speech = false;
+                }
+                //当记录表弹出框显示时，向记录表第一页添加
+                if (_this.modelShow) {
+                  recordAddList.push(item);
+                }
+                //超出预警涨幅渲染tableCell
+                return _this.renderUpsBack(item);
+              } else {
+                //未超出预警限制，只渲染成交占比背景色
+                return _this.renderEnCompRatioBack(item);
+              }
+            });
+          }
+          _this.riseData = riseDataList;
+          if (resObject.downStockRecords) {
+            //映射出新新数组
+            fallDataList = resObject.downStockRecords.map((item) => {
+              //触警并且是非连续触警
+              if (item.lIsAlertor == 1) {
+                //进行语音播报
+                if (Speech && item.cIsRead == 0) {
+                  item._highlight = true;
+                  _this.speak(item.vcReportCode + '', item.vcStockName, "跌幅为百分之", item.enUpOrDowns);
+                  Speech = false;
+                }
+                //当记录表弹出框显示时，向记录表第一页添加
+                if (_this.modelShow) {
+                  recordAddList.push(item);
+                }
+                //超出预警跌幅渲染tableCell
+                return _this.renderDownsBack(item);
+              } else {
+                //没有超出预警只渲染成交占比背景色
+                return _this.renderEnCompRatioBack(item);
+              }
+            });
+          }
+
+          //渲染跌幅表格
+          _this.fallData = fallDataList;
+          //记录表显示状态并且处于第一页时，向记录表第一页前添加数据
+          if (_this.modelShow && _this.pageNum == 1) {
+            _this.recordData = recordAddList.concat(_this.recordData).slice(0, _this.pageSize)
+          }
+        }
+      }).catch((err) => {
+        // console.log( reqloggerErr)
+        reqloggerErr.error(err);
+      })
+
+    },
+    // 创建定时器
+    initTimer () {
+      console.log(this.time)
+      // this.ajaxRecords();
+      var date = new Date()
+
+      //获取今天周几
+      var day = date.getDay();
+      this.timer = setInterval(() => {
+        //将当前时间格式化为时分秒并转为Int类型
+        var nowTimeInt = parseInt(moment().format('HHmmss'));
+        // console.log(nowTimeInt)
+        //周一到周五  并且当前时间是9:30到11:30 或者 13:00到15:00
+        if ((day != 0 && day != 6) && ((nowTimeInt >= 93000 && nowTimeInt <= 113000) || (nowTimeInt >= 130000 && nowTimeInt <= 150000))) {
+          // 去轮训请求数据
+          // console.log("去轮训请求数据")
+          this.ajaxRecords();
+        } else {
+          console.log("条件不成立")
+        }
+      }, this.time * 1000);
+    }
+  },
+
+  //Vue实例的created生命周期
+  created () {
+    this.userId = this.$store.getters.userInfo.userId;
+    // this.userRoles = this.$store.getters.userInfo.oaRoles[0].id;
+    // 初始换角色下拉框
+    this.initRolesSelect();
+    // 请求预警数据
+    this.selectWarnSetting();
+    // this.initTimer();
+
+    console.log(this.$store.getters.userInfo)
+    //创建连接
+    // this.initWebSocket();
+
+    //监听webSocket发送的消息
+    //    let _this = this;
+    //    var messageObj = {};
+    //    var resObject = {};
+    //    var riseDataList = [];
+    //    var fallDataList = [];
+    //    var recordAddList = [];
+    // function compare(val1,val2){
+    //         return val2.enUpOrDowns -val1.enUpOrDowns;
+    // };
+    //监听到webSocket的后端推送信息时调用
+    //    this.websock.onmessage = function(e){
+    //        //是否第一条播报数据的flag
+    //        var Speech  = true;
+    //        //清空向记录表中添加数据的数组
+    //        recordAddList.length = 0;
+    //        resObject = JSON.parse(e.data);
+    //        //返回状态码为0，不在交易时间提示
+    //        if(resObject.code == 0){
+    //            _this.websock.close();
+    //         //    _this.$Modal.warning({
+    //         //         title: "提示",
+    //         //         content: "不在交易时间内！"
+    //         //     });
+    //        }else{
+    //            messageObj = JSON.parse(resObject.stockRecords)
+    //            //映射出新数组
+    //            console.log("546546464")
+    //            console.log(messageObj)
+    //             riseDataList = messageObj.upStockRecords.map((item) => {
+    //                 //触警并且是非连续触警
+    //                 if(item.lIsAlertor == 1 ){
+    //                     //进行语音播报
+    //                     if(Speech && item.cIsRead  == 0){
+    //                         _this.speak(item.vcReportCode+'',item.vcStockName,"涨幅为百分之",item.enUpOrDowns);
+    //                         Speech = false;
+    //                     }
+    //                     //当记录表弹出框显示时，向记录表第一页添加
+    //                     if(_this.modelShow){
+    //                         recordAddList.push(item);
+    //                     }
+    //                     //超出预警涨幅渲染tableCell
+    //                     return _this.renderUpsBack(item);
+    //                 }else{
+    //                     //未超出预警限制，只渲染成交占比背景色
+    //                     return _this.renderEnCompRatioBack(item);
+    //                 }
+    //            });
+    //            console.log(riseDataList)
+    //            _this.riseData = riseDataList;
+    //            //映射出新新数组
+    //            fallDataList = messageObj.downStockRecords.map((item) => {
+    //                 //触警并且是非连续触警
+    //                 if(item.lIsAlertor == 1 ){
+    //                     //进行语音播报
+    //                     if(Speech && item.cIsRead  == 0){
+    //                         _this.speak(item.vcReportCode+'',item.vcStockName,"跌幅为百分之",item.enUpOrDowns);
+    //                         Speech = false;
+    //                     }
+    //                     //当记录表弹出框显示时，向记录表第一页添加
+    //                     if(_this.modelShow){
+    //                         recordAddList.push(item);
+    //                     }
+    //                     //超出预警跌幅渲染tableCell
+    //                     return _this.renderDownsBack(item);   
+    //                 }else{
+    //                     //没有超出预警只渲染成交占比背景色
+    //                    return _this.renderEnCompRatioBack(item);
+    //                 }
+    //            });
+    //            //渲染跌幅表格
+    //             _this.fallData = fallDataList;
+    //             //记录表显示状态并且处于第一页时，向记录表第一页前添加数据
+    //            if(_this.modelShow && _this.pageNum == 1){
+    //                _this.recordData = recordAddList.concat(_this.recordData).slice(0,_this.pageSize)
+    //            }
+    //        }
+    //    }
+    //    //监听webSocket关闭
+    //     this.websock.onopen = function(){
+    //         console.log("openopen++++++++++++++++++++++")
+    //     }
+    //     //监听webSocket错误
+    //     this.websock.onerror = function (evt) {
+    //         //产生异常
+    //         console.log("产生异常")
+    //     }
+    //     //监听webSocket关闭
+    //     this.websock.onclose=function(e){
+    //         console.log("guanbi")
+    //         this.websock = null;
+    //         console.log(this.websock)
+    //         console.log(e);
+    //     };
+
+  },
+  mounted () {
+    //调节表格高度，使自适应高度
+    this.resizeHandle();
+    window.addEventListener('resize', () => {
+      this.resizeHandle();
+    });
+  },
+  beforeDestroy () {
+    if (this.timer) {
+      console.log("清除定时器")
+      clearInterval(this.timer);//在vue实例销毁前，清除定时器
+    }
+    if (this.websock) {
+      this.websock.close(); //vue实例销毁前，关闭websocket
+      console.log("关闭websocket")
+    }
+
+  }
+}
+</script>
+
+<style scoped>
+/*整体的div高度*/
+#warn-wrapper {
+  height: 100%;
+}
+/* 小标题样式 */
+.title-div {
+  height: 30px;
+  line-height: 30px;
+  background: #212121;
+  color: rgb(245, 173, 3);
+  position: relative;
+}
+/* title-div中的文字外边距 */
+.title-div > span {
+  margin-left: 10px;
+}
+.speech-button {
+  display: inline-block;
+  position: absolute;
+  right: 20px;
+}
+/**/
+.show-record-button {
+  position: absolute;
+  right: 20px;
+  top: 3px;
+}
+.show-setting-button {
+  position: absolute;
+  right: 135px;
+  top: 3px;
+}
+/*#warn-wrapper .ivu-row{
+        padding:0 5px;
+    }*/
+
+/*setting-form*/
+
+.ivu-form {
+  padding: 15px;
+}
+.ivu-modal .ivu-form .ivu-input-group {
+  width: 280px;
+}
+.ivu-modal .ivu-form .ivu-form-item-label {
+  /*margin-left: 20px;*/
+  color: #ccc;
+}
+.btn-form-item {
+  text-align: right;
+  padding-right: 21px;
+}
+.user-role-label,
+.user-role-select {
+  position: absolute;
+  vertical-align: middle;
+}
+.user-role-label {
+  right: 370px;
+  color: #fff;
+}
+.user-role-select {
+  right: 220px;
+  top: 3px;
+}
+.label-class {
+  color: #fff;
+}
+
+.minWidth660 {
+  min-width: 660px;
+}
+.minWidth350 {
+  min-width: 350px;
+}
+.overflow-x {
+  overflow-x: auto;
+}
+</style>
